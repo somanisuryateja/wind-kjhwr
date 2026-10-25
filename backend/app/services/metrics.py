@@ -182,32 +182,31 @@ class MetricsEngine:
         else:
             volatility = "LOW"
 
-        # Trading recommendations
+        # Indicative trading strategy recommendations based strictly on evaluated wind forecast error:
         if bias > 250:
-            rec = "TRIM_PROCUREMENT_RISK"
+            rec = "SHORTFALL_RISK_BUFFER"
             hedge_mw = round(bias * 0.75, 1)
             rationale = (
-                f"Wind forecast exhibits systematic over-forecasting bias of +{bias:.1f} MW. "
-                f"Utilities relying solely on this forecast face high probability of being short in real-time "
-                f"and incurring punitive System Buy Prices in the Balancing Mechanism. "
-                f"Recommend holding an intraday reserve hedge of ~{hedge_mw:.0f} MW via flexible peakers."
+                f"Observed wind forecast displays an average over-forecasting bias of +{bias:.1f} MW. "
+                f"Historical actual generation has lagged the day-ahead forecast in {metrics.overforecast_percentage}% of intervals. "
+                f"In day-ahead bidding, utilities exposed to this skew face real-time delivery shortfalls. "
+                f"Indicative Strategy: Consider a risk buffer of ~{hedge_mw:.0f} MW when sizing backup thermal procurement."
             )
         elif bias < -250:
-            rec = "INCREASE_THERMAL_TURNDOWN_BUFFER"
+            rec = "SURPLUS_SPILL_RISK"
             hedge_mw = round(abs(bias) * 0.75, 1)
             rationale = (
-                f"Wind forecast exhibits systematic under-forecasting bias of {bias:.1f} MW. "
-                f"Actual wind generation consistently exceeds day-ahead expectations. "
-                f"Risk of being over-contracted and spilling power at depressed System Sell Prices. "
-                f"Recommend reducing baseload thermal purchases by ~{hedge_mw:.0f} MW."
+                f"Observed wind forecast displays an average under-forecasting bias of {bias:.1f} MW. "
+                f"Actual wind outturn consistently exceeded the day-ahead projection in {metrics.underforecast_percentage}% of intervals. "
+                f"Indicative Strategy: Evaluate lowering firm baseload thermal commitments by ~{hedge_mw:.0f} MW to minimize over-generation spill exposure."
             )
         else:
-            rec = "BALANCED_DAY_AHEAD_BIDDING"
+            rec = "NEUTRAL_UNCERTAINTY_HEDGE"
             hedge_mw = round(mae * 0.25, 1)
             rationale = (
-                f"Wind forecast shows well-calibrated mean bias ({bias:+.1f} MW). "
-                f"However, random volatility (MAE {mae:.1f} MW) warrants a dynamic risk buffer of {hedge_mw:.0f} MW "
-                f"during high-value peak periods (Periods 15–38)."
+                f"Wind forecast exhibits neutral directional bias ({bias:+.1f} MW). "
+                f"Unhedged exposure is driven primarily by random hourly volatility (MAE {mae:.1f} MW). "
+                f"Indicative Strategy: Maintain standard baseline procurement with dynamic peaker flexibility (~{hedge_mw:.0f} MW) during peak demand hours."
             )
 
         return TradingDecisionSummary(

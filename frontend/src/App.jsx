@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import MetricCards from './components/MetricCards';
-import PeakComparison from './components/PeakComparison';
 import TimeSeriesChart from './components/TimeSeriesChart';
-import DiurnalErrorChart from './components/DiurnalErrorChart';
-import HorizonChart from './components/HorizonChart';
-import TraderDecisionHelper from './components/TraderDecisionHelper';
+import TraderDecisionRail from './components/TraderDecisionRail';
+import AuditAnalytics from './components/AuditAnalytics';
+import SettlementTable from './components/SettlementTable';
 import { fetchDashboardData } from './services/api';
-import { BookOpen, Cpu, Globe, Database, Terminal, CheckCircle2 } from 'lucide-react';
+import { Cpu, Database, Terminal, Globe, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function App() {
   const [startDate, setStartDate] = useState('2026-01-01');
@@ -15,8 +13,25 @@ export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'architecture'
+  const [showArchSpec, setShowArchSpec] = useState(false);
 
+  // Theme Management (Deep Obsidian Dark vs Crisp Porcelain Light)
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('trading_portal_theme');
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('trading_portal_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  // Data Loading
   const loadData = async (start, end) => {
     setLoading(true);
     setError(null);
@@ -40,6 +55,7 @@ export default function App() {
     setEndDate(newEnd);
   };
 
+  // CSV Export
   const handleExportCSV = () => {
     if (!data || !data.timeseries || !data.timeseries.length) return;
 
@@ -47,7 +63,7 @@ export default function App() {
       'StartTime',
       'SettlementDate',
       'SettlementPeriod',
-      'IsPeak',
+      'MarketRegime',
       'Actual_MW',
       'DayAheadForecast_MW',
       'LatestForecast_MW',
@@ -76,16 +92,16 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `uk_wind_forecast_accuracy_${startDate}_to_${endDate}.csv`);
+    link.setAttribute('download', `uk_wind_power_elexon_${startDate}_to_${endDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-gray-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-canvas text-textPrimary flex flex-col font-sans transition-colors">
       
-      {/* Top Navbar */}
+      {/* 1. Fluid Widescreen Header */}
       <Header
         startDate={startDate}
         endDate={endDate}
@@ -93,178 +109,175 @@ export default function App() {
         onExportCSV={handleExportCSV}
         loading={loading}
         dataSource={data?.data_source}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* 2. Fluid Canvas Main Body (up to 1720px) */}
+      <main className="flex-1 max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-8">
         
-        {/* Navigation Tabs (Trader Dashboard vs Tech Lead Architecture Review) */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'dashboard'
-                  ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Client Pitch: Day-Ahead Trading Desk
-            </button>
-            <button
-              onClick={() => setActiveTab('architecture')}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'architecture'
-                  ? 'bg-blue-500/10 text-blue-300 border border-blue-500/30'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Tech Lead Review: Architecture & System Design
-            </button>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-gray-500">
-            <span>Market Delivery: Jan 2026</span>
-            <span>•</span>
-            <span>Gate Closure: 12:00 D-1</span>
-          </div>
-        </div>
-
-        {/* TAB 1: TRADING DESK VIEW */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            
-            {/* 1. Scorecards */}
-            <MetricCards metrics={data?.metrics} loading={loading} />
-
-            {/* 2. Peak vs Off-Peak & Outliers */}
-            <PeakComparison metrics={data?.metrics} />
-
-            {/* 3. Decision Assistant */}
-            <TraderDecisionHelper
-              tradingDecision={data?.trading_decision}
-              metrics={data?.metrics}
-            />
-
-            {/* 4. Main Time Series Interactive Chart */}
-            <TimeSeriesChart data={data?.timeseries} loading={loading} />
-
-            {/* 5. Deep Analytics Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DiurnalErrorChart hourlyBreakdown={data?.hourly_breakdown} />
-              <HorizonChart horizonMetrics={data?.horizon_metrics} />
-            </div>
-
+        {/* Error notification if any */}
+        {error && (
+          <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs px-4 py-2.5 rounded-xl font-medium">
+            {error}
           </div>
         )}
 
-        {/* TAB 2: TECH LEAD ARCHITECTURE & SYSTEM DESIGN */}
-        {activeTab === 'architecture' && (
-          <div className="space-y-6 bg-[#111827] border border-gray-800 rounded-xl p-6">
+        {/* ZONE 1: PRIMARY ASYMMETRIC DAY-AHEAD TRADING COCKPIT */}
+        <section aria-label="Day-Ahead Trading Cockpit">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            <div className="border-b border-gray-800 pb-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-blue-400" />
-                <span>Technical Architecture & Development Documentation</span>
-              </h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Full review document for Technical Lead evaluation and knowledge transfer.
-              </p>
+            {/* Main Stage: Hero Forecast Chart + Integrated Metric Ribbon (70% on desktop) */}
+            <div className="lg:col-span-8 xl:col-span-8">
+              <TimeSeriesChart
+                data={data?.timeseries}
+                metrics={data?.metrics}
+                loading={loading}
+                theme={theme}
+              />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Architecture Column 1 */}
-              <div className="bg-gray-900/60 p-4 rounded-xl border border-gray-800 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
-                  <Database className="w-4 h-4" />
-                  <span>1. Elexon Data Ingestion</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Ingests half-hourly actual wind outturn (<code className="text-emerald-300 font-mono">FUELHH</code>) and national wind forecasts (<code className="text-amber-300 font-mono">WINDFOR</code>) directly from the official public Elexon BMRS API.
-                </p>
-                <div className="text-[11px] text-gray-400 bg-black/40 p-2.5 rounded font-mono">
-                  • FUELHH: fuelType = "WIND"<br />
-                  • WINDFOR: startTime, publishTime, generation<br />
-                  • Caching: JSON/SQLite cache prevents API throttling
-                </div>
-              </div>
-
-              {/* Architecture Column 2 */}
-              <div className="bg-gray-900/60 p-4 rounded-xl border border-gray-800 space-y-3">
-                <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
-                  <Terminal className="w-4 h-4" />
-                  <span>2. Gate Closure Matcher</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Simulates institutional UK day-ahead wholesale trading constraints. The auction gate closure occurs strictly at <span className="text-amber-300 font-semibold">12:00 PM GMT on Day D-1</span>.
-                </p>
-                <div className="text-[11px] text-gray-400 bg-black/40 p-2.5 rounded font-mono">
-                  • Algorithm: argmax(publishTime) where publishTime &lt;= 12:00 D-1<br />
-                  • Fallback: Nearest hourly interpolation for :30 intervals<br />
-                  • Alignment: 100% half-hourly interval coverage
-                </div>
-              </div>
-
-              {/* Architecture Column 3 */}
-              <div className="bg-gray-900/60 p-4 rounded-xl border border-gray-800 space-y-3">
-                <div className="flex items-center gap-2 text-purple-400 font-semibold text-sm">
-                  <Globe className="w-4 h-4" />
-                  <span>3. Math & Containerization</span>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  FastAPI backend performs vectorized statistical calculations with NumPy & Pandas. Full Docker orchestration containerizes both tiers for 1-command startup.
-                </p>
-                <div className="text-[11px] text-gray-400 bg-black/40 p-2.5 rounded font-mono">
-                  • Vectorized MAE, RMSE, MAPE, MBE<br />
-                  • Peak hours partitioning (SP 15-38)<br />
-                  • Dockerfile + docker-compose ready
-                </div>
-              </div>
-
-            </div>
-
-            {/* Code Verification Checklist */}
-            <div className="mt-6 pt-4 border-t border-gray-800 space-y-2">
-              <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                Key Development Practices & Compliance
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-400">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Clean Decoupled Architecture (React Vite + FastAPI)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Strict Type Annotations with Pydantic v2 schemas</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Robust Error Handling & Graceful Fallback Mode</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Interactive CSV Data Export for Trader Spreadsheets</span>
-                </div>
-              </div>
+            {/* Operational Rail: Decision Support & Scenario Bid Sizer (30% on desktop) */}
+            <div className="lg:col-span-4 xl:col-span-4">
+              <TraderDecisionRail
+                tradingDecision={data?.trading_decision}
+                metrics={data?.metrics}
+                loading={loading}
+              />
             </div>
 
           </div>
-        )}
+        </section>
+
+        {/* ZONE 2: DEDICATED ACCURACY AUDIT & VOLATILITY ANALYTICS */}
+        <section aria-label="Statistical Accuracy Audit">
+          <AuditAnalytics
+            hourlyBreakdown={data?.hourly_breakdown}
+            horizonMetrics={data?.horizon_metrics}
+            theme={theme}
+          />
+        </section>
+
+        {/* ZONE 3: INTERACTIVE SETTLEMENT INTERVAL LEDGER TABLE */}
+        <section aria-label="Settlement Interval Audit Ledger">
+          <SettlementTable
+            timeseries={data?.timeseries}
+            theme={theme}
+          />
+        </section>
+
+        {/* ZONE 4: TECHNICAL ARCHITECTURE & SYSTEM DESIGN (Collapsible Drawer for Tech Lead) */}
+        <section aria-label="System Architecture Review">
+          <div className="bg-surface border border-borderSubtle rounded-2xl shadow-sm overflow-hidden transition-colors">
+            
+            <button
+              onClick={() => setShowArchSpec(!showArchSpec)}
+              className="w-full p-4 sm:p-5 flex items-center justify-between hover:bg-hover/40 transition-colors text-left"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-textPrimary">
+                    Technical Lead Review: Architecture & Data Engineering Specifications
+                  </h3>
+                  <p className="text-xs text-textSecondary mt-0.5">
+                    FastAPI asynchronous ingestion, 12:00 D-1 Gate Closure matcher, vectorized NumPy math, and Docker containerization.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 text-xs text-textSecondary">
+                <span className="font-mono">{showArchSpec ? 'Collapse' : 'Expand Review'}</span>
+                {showArchSpec ? (
+                  <ChevronUp className="w-4 h-4 text-textMuted" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-textMuted" />
+                )}
+              </div>
+            </button>
+
+            {showArchSpec && (
+              <div className="p-5 sm:p-6 border-t border-borderSubtle space-y-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  
+                  {/* Pipeline Step 1 */}
+                  <div className="bg-subtle/50 p-4 rounded-xl border border-borderSubtle/60 space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-500 font-semibold text-xs uppercase tracking-wider">
+                      <Database className="w-4 h-4" />
+                      <span>1. Elexon BMRS Stream Ingestion</span>
+                    </div>
+                    <p className="text-xs text-textSecondary leading-relaxed">
+                      Async client stream connects to <code className="font-mono text-emerald-500">FUELHH</code> (actual outturn wind power) and <code className="font-mono text-amber-500">WINDFOR</code> (national wind power forecasts). Enforces strict settlement date boundaries and caches to JSON.
+                    </p>
+                  </div>
+
+                  {/* Pipeline Step 2 */}
+                  <div className="bg-subtle/50 p-4 rounded-xl border border-borderSubtle/60 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-500 font-semibold text-xs uppercase tracking-wider">
+                      <Terminal className="w-4 h-4" />
+                      <span>2. Gate Closure Alignment</span>
+                    </div>
+                    <p className="text-xs text-textSecondary leading-relaxed">
+                      Simulates UK Day-Ahead Auction constraint (12:00 PM GMT on Day D-1). Filters forecasts by <code className="font-mono text-blue-500">publishTime &le; 12:00 D-1</code> and aligns half-hourly periods with 100% matched coverage.
+                    </p>
+                  </div>
+
+                  {/* Pipeline Step 3 */}
+                  <div className="bg-subtle/50 p-4 rounded-xl border border-borderSubtle/60 space-y-2">
+                    <div className="flex items-center gap-2 text-purple-500 font-semibold text-xs uppercase tracking-wider">
+                      <Globe className="w-4 h-4" />
+                      <span>3. Vectorized Math Engine</span>
+                    </div>
+                    <p className="text-xs text-textSecondary leading-relaxed">
+                      Computes MAE, RMSE, MAPE, and Mean Bias via vectorized NumPy operations in &lt;15ms. Partitions peak hours (Periods 15–38 / 07:00–19:00 GMT) to isolate high-value price exposures.
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Compliance Checklist */}
+                <div className="pt-4 border-t border-borderSubtle grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-textSecondary">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Fluid 1720px Widescreen Canvas</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Dual Obsidian & Porcelain Themes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Interactive Settlement Audit Ledger</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Single-Command Docker Orchestration</span>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        </section>
 
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800/80 bg-[#0E131F] py-4 text-xs text-gray-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      {/* 3. Fluid Footer */}
+      <footer className="border-t border-borderSubtle bg-surface py-4 text-xs text-textMuted transition-colors">
+        <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
-            UK Energy Utility Day-Ahead Renewable Forecast System • January 2026
+            UK Energy Utility Day-Ahead Renewable Forecast System • January 2026 Elexon BMRS Stream
           </div>
-          <div className="flex items-center gap-4 text-gray-400">
-            <span>React + Vite</span>
-            <span>FastAPI</span>
-            <span>Elexon BMRS</span>
-            <span>Docker</span>
+          <div className="flex items-center gap-4 text-textSecondary font-mono text-[11px]">
+            <span>FastAPI Python 3.12</span>
+            <span>•</span>
+            <span>React 18 Vite</span>
+            <span>•</span>
+            <span>Docker Nginx</span>
           </div>
         </div>
       </footer>

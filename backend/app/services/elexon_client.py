@@ -29,11 +29,17 @@ class ElexonClient:
             except Exception as e:
                 print(f"[CACHE READ ERROR] {e}, fetching fresh data...")
 
-        # Elexon API streams expect publishDateTimeFrom / To or settlementDateFrom / To
-        # Since FUELHH publishTime is within 1 hour of target time:
+        # To ensure we capture Period 48 (which publishes at 00:00Z on the following day),
+        # we expand the query window by 2 hours into the following day.
+        try:
+            dt_end_next = datetime.fromisoformat(end_date) + timedelta(days=1)
+            end_query_str = dt_end_next.strftime("%Y-%m-%d")
+        except Exception:
+            end_query_str = end_date
+
         params = {
             "publishDateTimeFrom": f"{start_date}T00:00:00Z",
-            "publishDateTimeTo": f"{end_date}T23:59:59Z"
+            "publishDateTimeTo": f"{end_query_str}T02:00:00Z"
         }
 
         wind_records = []
@@ -42,12 +48,17 @@ class ElexonClient:
                 resp = await client.get(FUELHH_ENDPOINT, params=params)
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Filter for WIND fuel type only
+                    # Filter for WIND fuel type and enforce strict settlement_date boundaries
                     for item in data:
-                        if item.get("fuelType", "").upper() == "WIND":
+                        sdate = item.get("settlementDate")
+                        if (
+                            item.get("fuelType", "").upper() == "WIND"
+                            and sdate
+                            and start_date <= sdate <= end_date
+                        ):
                             wind_records.append({
                                 "start_time": item.get("startTime"),
-                                "settlement_date": item.get("settlementDate"),
+                                "settlement_date": sdate,
                                 "settlement_period": item.get("settlementPeriod", 0),
                                 "fuel_type": "WIND",
                                 "generation": float(item.get("generation", 0.0))
