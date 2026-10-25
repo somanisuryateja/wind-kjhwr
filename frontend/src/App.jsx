@@ -15,11 +15,11 @@ export default function App() {
   const [error, setError] = useState(null);
   const [showArchSpec, setShowArchSpec] = useState(false);
 
-  // Theme Management (Deep Obsidian Dark vs Crisp Porcelain Light)
+  // Theme Management (Crisp Porcelain Light as Default vs Deep Obsidian Dark)
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('trading_portal_theme');
     if (saved) return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'dark';
+    return 'light';
   });
 
   useEffect(() => {
