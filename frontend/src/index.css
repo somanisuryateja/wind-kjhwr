@@ -18,7 +18,8 @@
   --chart-tooltip-border: #E2E8F0;
 }
 
-[data-theme='dark'] {
+[data-theme='dark'],
+.dark {
   /* Deep Obsidian Dark Theme */
   --bg-canvas: #0A0D14;
   --bg-surface: #111622;

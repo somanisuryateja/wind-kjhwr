@@ -24,6 +24,14 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
     localStorage.setItem('trading_portal_theme', theme);
   }, [theme]);
 
@@ -111,6 +119,7 @@ export default function App() {
         dataSource={data?.data_source}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onThemeChange={setTheme}
       />
 
       {/* 2. Fluid Canvas Main Body (up to 1720px) */}

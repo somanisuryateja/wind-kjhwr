@@ -10,6 +10,8 @@ class ElexonClient:
     def __init__(self):
         self.cache_dir = CACHE_DIR
         self.client_timeout = 60.0
+        self.master_start = "2026-01-01"
+        self.master_end = "2026-01-31"
 
     def _get_cache_path(self, dataset: str, start_date: str, end_date: str) -> Path:
         clean_start = start_date.replace(":", "-")
@@ -21,25 +23,40 @@ class ElexonClient:
         Fetch actual wind generation from FUELHH dataset.
         start_date and end_date in YYYY-MM-DD format.
         """
+        # 1. Check exact cache file
         cache_path = self._get_cache_path("FUELHH_WIND", start_date, end_date)
         if cache_path.exists():
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[CACHE READ ERROR] {e}, fetching fresh data...")
+                print(f"[CACHE READ ERROR] {e}, checking master cache...")
 
-        # To ensure we capture Period 48 (which publishes at 00:00Z on the following day),
-        # we expand the query window by 2 hours into the following day.
-        try:
-            dt_end_next = datetime.fromisoformat(end_date) + timedelta(days=1)
-            end_query_str = dt_end_next.strftime("%Y-%m-%d")
-        except Exception:
-            end_query_str = end_date
+        # 2. Check if master full-month cache exists and can satisfy the date range
+        master_cache_path = self._get_cache_path("FUELHH_WIND", self.master_start, self.master_end)
+        if master_cache_path.exists() and self.master_start <= start_date and end_date <= self.master_end:
+            try:
+                with open(master_cache_path, "r", encoding="utf-8") as f:
+                    master_data = json.load(f)
+                sliced = [
+                    item for item in master_data
+                    if start_date <= item.get("settlement_date", "") <= end_date
+                ]
+                if sliced:
+                    # Save sliced range into cache for fast future lookups
+                    try:
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump(sliced, f)
+                    except Exception:
+                        pass
+                    return sliced
+            except Exception as e:
+                print(f"[MASTER CACHE SLICE ERROR] {e}, falling back to live API...")
 
+        # 3. Live API Fetch using exact settlementDateFrom & settlementDateTo
         params = {
-            "publishDateTimeFrom": f"{start_date}T00:00:00Z",
-            "publishDateTimeTo": f"{end_query_str}T02:00:00Z"
+            "settlementDateFrom": start_date,
+            "settlementDateTo": end_date
         }
 
         wind_records = []
@@ -48,7 +65,6 @@ class ElexonClient:
                 resp = await client.get(FUELHH_ENDPOINT, params=params)
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Filter for WIND fuel type and enforce strict settlement_date boundaries
                     for item in data:
                         sdate = item.get("settlementDate")
                         if (
@@ -64,37 +80,67 @@ class ElexonClient:
                                 "generation": float(item.get("generation", 0.0))
                             })
                     
+                    # Sort by start_time ascending
+                    wind_records.sort(key=lambda x: x["start_time"])
+
                     # Cache the filtered wind records
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        json.dump(wind_records, f)
+                    if wind_records:
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump(wind_records, f)
                     return wind_records
                 else:
                     print(f"[ELEXON API ERROR] FUELHH returned status {resp.status_code}: {resp.text[:200]}")
             except Exception as ex:
                 print(f"[ELEXON FETCH EXCEPTION] FUELHH: {ex}")
 
-        # If API call fails but cache exists or fallback needed, return empty list
         return wind_records
 
     async def fetch_windfor_forecasts(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
         """
         Fetch wind power forecasts from WINDFOR dataset.
-        To capture Day-Ahead forecasts published up to 2 days prior to start_date,
-        we expand the query window.
+        Captures Day-Ahead forecasts published prior to gate closure on Day D-1.
         """
+        # 1. Check exact cache file
         cache_path = self._get_cache_path("WINDFOR", start_date, end_date)
         if cache_path.exists():
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[CACHE READ ERROR] {e}, fetching fresh forecasts...")
+                print(f"[CACHE READ ERROR] {e}, checking master cache...")
 
-        # Expanding publish window 48 hours prior to start_date to ensure we get day-ahead forecasts
+        # 2. Check if master full-month cache exists and can satisfy the date range
+        master_cache_path = self._get_cache_path("WINDFOR", self.master_start, self.master_end)
+        if master_cache_path.exists() and self.master_start <= start_date and end_date <= self.master_end:
+            try:
+                with open(master_cache_path, "r", encoding="utf-8") as f:
+                    master_data = json.load(f)
+                
+                # Delivery target window (start_date 00:00 to end_date 23:59)
+                start_prefix = f"{start_date}T00:00:00Z"
+                end_dt_next = datetime.fromisoformat(end_date) + timedelta(days=1)
+                end_prefix = f"{end_dt_next.strftime('%Y-%m-%d')}T00:00:00Z"
+
+                sliced = [
+                    item for item in master_data
+                    if start_prefix <= item.get("start_time", "") <= end_prefix
+                ]
+                if sliced:
+                    try:
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump(sliced, f)
+                    except Exception:
+                        pass
+                    return sliced
+            except Exception as e:
+                print(f"[MASTER CACHE WINDFOR SLICE ERROR] {e}, falling back to live API...")
+
+        # 3. Live API Fetch: Expand publish window 48 hours prior to start_date
         dt_start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc) - timedelta(days=2)
+        dt_end_next = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
         params = {
             "publishDateTimeFrom": dt_start.strftime("%Y-%m-%dT00:00:00Z"),
-            "publishDateTimeTo": f"{end_date}T23:59:59Z"
+            "publishDateTimeTo": dt_end_next.strftime("%Y-%m-%dT02:00:00Z")
         }
 
         forecast_records = []
@@ -110,9 +156,9 @@ class ElexonClient:
                             "generation": float(item.get("generation", 0.0))
                         })
 
-                    # Cache records
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        json.dump(forecast_records, f)
+                    if forecast_records:
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump(forecast_records, f)
                     return forecast_records
                 else:
                     print(f"[ELEXON API ERROR] WINDFOR returned status {resp.status_code}: {resp.text[:200]}")
@@ -124,9 +170,9 @@ class ElexonClient:
     async def get_aligned_comparison_dataset(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
         """
         Aligns actuals and forecasts by matching each half-hour delivery startTime:
-        1. Identifies the Day-Ahead Gate Closure (12:00 GMT on D-1).
-        2. Picks the latest forecast published before Gate Closure (Day-Ahead Forecast).
-        3. Picks the latest forecast published before actual delivery (Intraday Forecast).
+        1. Identifies the official Day-Ahead Gate Closure (12:00 PM GMT on Day D-1).
+        2. Picks the latest forecast published on or before Gate Closure (Day-Ahead Forecast).
+        3. Picks the latest forecast published on or before actual delivery (Intraday Latest).
         4. Calculates quantitative errors.
         """
         actuals = await self.fetch_fuelhh_actuals(start_date, end_date)
@@ -135,10 +181,11 @@ class ElexonClient:
         # Index forecasts by target startTime -> list of forecasts
         forecast_map: Dict[str, List[Dict[str, Any]]] = {}
         for f in forecasts:
-            st = f["start_time"]
-            if st not in forecast_map:
-                forecast_map[st] = []
-            forecast_map[st].append(f)
+            st = f.get("start_time")
+            if st:
+                if st not in forecast_map:
+                    forecast_map[st] = []
+                forecast_map[st].append(f)
 
         # Sort each forecast list by publish_time ascending
         for st in forecast_map:
@@ -146,31 +193,37 @@ class ElexonClient:
 
         aligned_data = []
 
-        # Sort actuals by start_time
+        # Sort actuals chronologically by start_time
         actuals.sort(key=lambda x: x["start_time"])
 
         for act in actuals:
-            st_str = act["start_time"]
-            act_gen = act["generation"]
-            sp = act["settlement_period"]
-            sdate = act["settlement_date"]
+            sdate = act.get("settlement_date")
+            # Strict settlement date filtering: ensure no boundary bleed-over
+            if not sdate or sdate < start_date or sdate > end_date:
+                continue
 
+            st_str = act.get("start_time")
+            if not st_str:
+                continue
+
+            act_gen_raw = act.get("generation")
+            if act_gen_raw is None:
+                continue
+            act_gen = float(act_gen_raw)
+            sp = int(act.get("settlement_period", 0))
+
+            # Day-Ahead Gate Closure: 12:00:00 UTC on Day D-1 (the day before sdate)
             try:
-                # Target start datetime in UTC
-                dt_target = datetime.fromisoformat(st_str.replace("Z", "+00:00"))
+                sdate_dt = datetime.strptime(sdate, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                gate_closure = sdate_dt - timedelta(days=1) + timedelta(hours=GATE_CLOSURE_HOUR_D_MINUS_1)
+                gate_closure_str = gate_closure.strftime("%Y-%m-%dT%H:%M:%SZ")
             except Exception:
                 continue
 
-            # Day-Ahead Gate Closure: (Target Date - 1 day) at 12:00:00 UTC
-            gate_closure = datetime(
-                dt_target.year, dt_target.month, dt_target.day,
-                GATE_CLOSURE_HOUR_D_MINUS_1, 0, 0, tzinfo=timezone.utc
-            ) - timedelta(days=1)
-            gate_closure_str = gate_closure.strftime("%Y-%m-%dT%H:%M:%SZ")
-
             available_forecasts = forecast_map.get(st_str, [])
 
-            # If no direct forecast exists for half-hour interval (e.g. 00:30:00Z), check prevailing hour (00:00:00Z)
+            # WINDFOR publishes on clock hourly boundaries (:00:00Z).
+            # If no direct forecast exists for :30:00Z interval, use the prevailing hour (:00:00Z).
             if not available_forecasts and ":30:00Z" in st_str:
                 prevailing_hour_st = st_str.replace(":30:00Z", ":00:00Z")
                 available_forecasts = forecast_map.get(prevailing_hour_st, [])
@@ -178,20 +231,14 @@ class ElexonClient:
             day_ahead_fc = None
             latest_fc = None
 
-            # Find latest forecast published on or before gate closure
+            # Find latest forecast published strictly on or before gate closure (12:00 D-1)
+            # and latest forecast published strictly on or before delivery startTime
             for fc in available_forecasts:
-                pub_str = fc["publish_time"]
+                pub_str = fc.get("publish_time", "")
                 if pub_str <= gate_closure_str:
                     day_ahead_fc = fc
                 if pub_str <= st_str:
                     latest_fc = fc
-
-            # Fallback if no forecast was published prior to 12:00 D-1, use earliest available
-            if day_ahead_fc is None and available_forecasts:
-                day_ahead_fc = available_forecasts[0]
-
-            if latest_fc is None and available_forecasts:
-                latest_fc = available_forecasts[-1]
 
             da_gen = day_ahead_fc["generation"] if day_ahead_fc else None
             da_pub = day_ahead_fc["publish_time"] if day_ahead_fc else None
