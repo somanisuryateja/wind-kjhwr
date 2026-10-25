@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function fetchDashboardData(startDate = '2026-01-01', endDate = '2026-01-08') {
   try {
