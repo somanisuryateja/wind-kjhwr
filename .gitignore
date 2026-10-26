@@ -4,6 +4,5 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-backend/data/cache/*.json
 .DS_Store
 .env

@@ -64,3 +64,13 @@ jobs:
             sudo systemctl reload nginx
           "
           echo "Deployment completed successfully!"
+
+      - name: Smoke test live site
+        run: |
+          # Fails the run if the server is still running an old backend (e.g. the
+          # systemd service points at a different folder than /opt/wind-backend).
+          sleep 5
+          curl -fsS https://wind.suryadeals.com/api/health
+          curl -fsS -o /dev/null "https://wind.suryadeals.com/api/forecast?date=2026-01-15"
+          curl -fsS -o /dev/null "https://wind.suryadeals.com/api/accuracy"
+          echo "Live API OK"

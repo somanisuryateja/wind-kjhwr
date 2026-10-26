@@ -1,89 +1,63 @@
-from fastapi import FastAPI, Query, HTTPException
+from datetime import date
+from functools import lru_cache
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-from typing import Optional, List, Dict, Any
 
-from .config import CORS_ORIGINS, DEFAULT_START_DATE, DEFAULT_END_DATE, FULL_MONTH_START, FULL_MONTH_END
-from .models.schemas import DashboardResponse, AccuracyMetrics, ComparisonPoint, TradingDecisionSummary, HorizonAccuracy
-from .services.elexon_client import elexon_service
-from .services.metrics import metrics_engine
+from . import analysis, data
 
-app = FastAPI(
-    title="UK Energy Utility Wind Forecast & Evaluation Portal",
-    description="High-frequency renewable forecasting and accuracy audit system for UK Day-Ahead power trading.",
-    version="1.0.0"
-)
+app = FastAPI(title="UK Wind Forecast Monitor")
+# Read-only public data; lets the frontend live on a different host if needed.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
 
-# Enable CORS for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+FIRST = date.fromisoformat(data.FIRST_DELIVERY_DAY)
+LAST = date.fromisoformat(data.LAST_DELIVERY_DAY)
+DecisionHour = Query(9, ge=0, le=23, description="Hour (UK time) on the day before delivery when the purchase is made")
+
+
+@lru_cache
+def runs():
+    return analysis.index_runs(data.forecasts())
+
+
+def delivery_day(value: str) -> date:
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(400, f"Invalid date '{value}', expected YYYY-MM-DD.")
+    if not FIRST <= day <= LAST:
+        raise HTTPException(400, f"Date must be between {FIRST} and {LAST}.")
+    return day
+
+
+@lru_cache
+def january_band(hour: int) -> dict:
+    # ponytail: uses the whole window, so a day's own errors feed its band.
+    # Switch to a trailing window (days before D-1 only) if this becomes a live tool.
+    return analysis.summarize(analysis.decision_errors(FIRST, LAST, hour, data.actuals(), runs()))
+
 
 @app.get("/api/health")
-async def health_check():
+def health():
+    return {"status": "healthy"}
+
+
+@app.get("/api/forecast")
+def forecast(day: str = Query(..., alias="date", description="Delivery day, YYYY-MM-DD"), decision_hour: int = DecisionHour):
+    """What the desk saw at decision time for one delivery day, plus a likely range and hindsight actuals."""
+    band = january_band(decision_hour)
+    view = analysis.day_view(delivery_day(day), decision_hour, data.actuals(), runs(), band)
+    return {**view, "band": band}
+
+
+@app.get("/api/accuracy")
+def accuracy(start: str = data.FIRST_DELIVERY_DAY, end: str = data.LAST_DELIVERY_DAY, decision_hour: int = DecisionHour):
+    first, last = delivery_day(start), delivery_day(end)
+    if first > last:
+        raise HTTPException(400, "Start date must be on or before end date.")
+    errors = analysis.decision_errors(first, last, decision_hour, data.actuals(), runs())
     return {
-        "status": "healthy",
-        "service": "WindForecastEvaluationAPI",
-        "version": "1.0.0",
-        "market": "UK Wholesale Electricity (EPEX SPOT / Nord Pool UK)",
-        "source": "Elexon BMRS Live Data Stream"
+        "summary": analysis.summarize(errors),
+        "histogram": analysis.histogram(errors),
+        "by_lead_time": analysis.errors_by_lead_time(first, last, data.actuals(), data.forecasts()),
     }
-
-@app.get("/api/dashboard", response_model=DashboardResponse)
-async def get_dashboard_data(
-    start_date: str = Query(DEFAULT_START_DATE, description="Start date in YYYY-MM-DD format (within Jan 2026)"),
-    end_date: str = Query(DEFAULT_END_DATE, description="End date in YYYY-MM-DD format (within Jan 2026)")
-):
-    try:
-        # Validate dates
-        d_start = datetime.fromisoformat(start_date)
-        d_end = datetime.fromisoformat(end_date)
-        if d_start > d_end:
-            raise HTTPException(status_code=400, detail="start_date must be on or before end_date.")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-
-    # Ingest and match datasets
-    aligned_data = await elexon_service.get_aligned_comparison_dataset(start_date, end_date)
-
-    if not aligned_data:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No wind actuals or forecast data found for period {start_date} to {end_date}."
-        )
-
-    # Compute quantitative statistics
-    metrics = metrics_engine.compute_accuracy_metrics(aligned_data)
-    hourly = metrics_engine.compute_hourly_breakdown(aligned_data)
-    horizons = metrics_engine.compute_horizon_breakdown()
-    trading_decision = metrics_engine.generate_trading_decision_support(metrics)
-
-    return DashboardResponse(
-        start_date=start_date,
-        end_date=end_date,
-        data_source="Elexon BMRS (FUELHH + WINDFOR)",
-        metrics=metrics,
-        timeseries=aligned_data,
-        hourly_breakdown=hourly,
-        horizon_metrics=horizons,
-        trading_decision=trading_decision
-    )
-
-@app.get("/api/timeseries", response_model=List[ComparisonPoint])
-async def get_timeseries(
-    start_date: str = Query(DEFAULT_START_DATE),
-    end_date: str = Query(DEFAULT_END_DATE)
-):
-    return await elexon_service.get_aligned_comparison_dataset(start_date, end_date)
-
-@app.get("/api/metrics", response_model=AccuracyMetrics)
-async def get_metrics(
-    start_date: str = Query(DEFAULT_START_DATE),
-    end_date: str = Query(DEFAULT_END_DATE)
-):
-    data = await elexon_service.get_aligned_comparison_dataset(start_date, end_date)
-    return metrics_engine.compute_accuracy_metrics(data)
