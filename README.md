@@ -5,7 +5,9 @@ A small web app for a UK utility's day-ahead power desk. It answers two question
 1. **What wind forecast did we have when we had to buy?** For any delivery day, it shows the latest forecast available at the purchase decision time (default 09:00 the day before), a likely range for the actual outturn, and the actual outturn afterwards.
 2. **How accurate is that forecast?** It shows the error of the decision-time forecast (MAE, bias, median, RMSE, 10th/90th percentiles), how error changes with forecast lead time, and how errors are distributed.
 
-**Live app:** https://wind.suryadeals.com (Oracle Cloud VM, auto-deployed by GitHub Actions on every push to `main`)
+**Live app:** https://wind.suryadeals.com
+
+**Hosting note:** the brief suggests Vercel or Heroku. I hosted it on my own Oracle Cloud VM instead (nginx serving the React build, FastAPI under systemd, HTTPS via Let's Encrypt). It deploys the same way a PaaS would: every push to `main` runs a GitHub Actions workflow ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) that builds the frontend, syncs the backend, restarts the service and then smoke-tests the live API. Docker Compose is still included for running everything locally.
 
 Stack: React 18 + Vite + Tailwind + Recharts (frontend), Python 3.12 + FastAPI (backend), Docker Compose.
 
