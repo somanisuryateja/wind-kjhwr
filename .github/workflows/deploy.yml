@@ -33,22 +33,34 @@ jobs:
           USER: ${{ secrets.SERVER_USER }}
         run: |
           if [ -z "$SSH_KEY" ] || [ -z "$HOST" ]; then
-            echo "Skipping SSH deploy: Secrets SSH_PRIVATE_KEY or SERVER_HOST not configured on this repository."
-            exit 0
+            echo "Error: Secrets SSH_PRIVATE_KEY or SERVER_HOST not configured on this repository."
+            exit 1
           fi
 
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Rsync built frontend dist to /var/www/wind/
+          # 1. Rsync built frontend dist directly to /var/www/wind/
+          echo "Deploying frontend assets to /var/www/wind/..."
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 $USER@$HOST "sudo mkdir -p /var/www/wind && sudo chown -R $USER:$USER /var/www/wind"
           rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" frontend/dist/ $USER@$HOST:/var/www/wind/
+          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo chown -R www-data:www-data /var/www/wind && sudo chmod -R 755 /var/www/wind"
 
-          # Rsync backend to /opt/wind-app/backend/
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo mkdir -p /opt/wind-app/backend && sudo chown -R $USER:$USER /opt/wind-app"
-          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" backend/ $USER@$HOST:/opt/wind-app/backend/
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no" deploy_server.sh $USER@$HOST:/opt/wind-app/
+          # 2. Rsync backend code to /opt/wind-backend/
+          echo "Syncing backend to /opt/wind-backend/..."
+          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo mkdir -p /opt/wind-backend && sudo chown -R $USER:$USER /opt/wind-backend"
+          rsync -avz --delete --exclude 'venv' --exclude '__pycache__' --exclude 'data/cache' -e "ssh -o StrictHostKeyChecking=no" backend/ $USER@$HOST:/opt/wind-backend/
 
-          # Run server-side configuration and service reload
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo bash /opt/wind-app/deploy_server.sh"
+          # 3. Restart FastAPI backend service and reload Nginx
+          echo "Restarting backend and reloading Nginx..."
+          ssh -o StrictHostKeyChecking=no $USER@$HOST "
+            cd /opt/wind-backend
+            if [ -d 'venv' ]; then
+              source venv/bin/activate
+              pip install -r requirements.txt
+            fi
+            sudo systemctl restart wind-backend
+            sudo systemctl reload nginx
+          "
+          echo "Deployment completed successfully!"
