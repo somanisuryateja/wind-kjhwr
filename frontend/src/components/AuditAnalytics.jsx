@@ -22,12 +22,14 @@ export default function AuditAnalytics({ hourlyBreakdown, horizonMetrics, theme 
       {/* Section Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-textPrimary flex items-center gap-2">
-            <Activity className="w-5 h-5 text-blue-500" />
-            <span>Quantitative Accuracy Audit & Lead-Time Decay</span>
+          <h2 className="text-sm sm:text-base md:text-lg font-bold text-textPrimary flex items-center gap-2">
+            <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+            <span className="hidden sm:inline">Quantitative Accuracy Audit & Lead-Time Decay</span>
+            <span className="sm:hidden">Accuracy Audit & Lead-Time</span>
           </h2>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Secondary analytical evaluation: Diurnal settlement volatility and lead-time degradation curve.
+          <p className="text-[11px] sm:text-xs text-textSecondary mt-0.5">
+            <span className="hidden sm:inline">Secondary analytical evaluation: Diurnal settlement volatility and lead-time degradation curve.</span>
+            <span className="sm:hidden">Diurnal volatility & forecast degradation analysis.</span>
           </p>
         </div>
         <span className="text-xs font-mono px-2.5 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 self-start sm:self-auto">
@@ -62,7 +64,7 @@ export default function AuditAnalytics({ hourlyBreakdown, horizonMetrics, theme 
             </div>
           </div>
 
-          <div className="h-[280px] w-full mt-4">
+          <div className="h-[200px] sm:h-[280px] w-full mt-3 sm:mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hourlyBreakdown || []} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
@@ -105,7 +107,7 @@ export default function AuditAnalytics({ hourlyBreakdown, horizonMetrics, theme 
             </span>
           </div>
 
-          <div className="h-[220px] w-full mt-4">
+          <div className="h-[160px] sm:h-[220px] w-full mt-3 sm:mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={horizonMetrics || []} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />

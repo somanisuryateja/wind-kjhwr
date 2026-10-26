@@ -1,5 +1,5 @@
-import React from 'react';
-import { Wind, Download, Calendar, Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Wind, Download, Calendar, Sun, Moon, Menu, X } from 'lucide-react';
 
 export default function Header({
   startDate,
@@ -12,6 +12,9 @@ export default function Header({
   onToggleTheme,
   onThemeChange
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const drawerRef = useRef(null);
+
   const presets = [
     { label: 'Jan 1–8 (Week 1)', start: '2026-01-01', end: '2026-01-08' },
     { label: 'Jan 8–15', start: '2026-01-08', end: '2026-01-15' },
@@ -19,10 +22,41 @@ export default function Header({
     { label: 'Full Jan 2026', start: '2026-01-01', end: '2026-01-31' },
   ];
 
+  // Close drawer on resize to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) setMobileOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Close drawer when clicking outside
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleClick = (e) => {
+      if (drawerRef.current && !drawerRef.current.contains(e.target)) {
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [mobileOpen]);
+
+  const handlePresetClick = (start, end) => {
+    onDateChange(start, end);
+    setMobileOpen(false);
+  };
+
   return (
-    <header className="border-b border-borderSubtle bg-surface/90 backdrop-blur sticky top-0 z-40 transition-colors">
+    <header
+      ref={drawerRef}
+      className="border-b border-borderSubtle bg-surface/90 backdrop-blur sticky top-0 z-40 transition-colors"
+    >
       <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+        {/* ═══════ DESKTOP LAYOUT (≥1024px) — Unchanged ═══════ */}
+        <div className="hidden lg:flex lg:items-center lg:justify-between gap-4">
 
           {/* Brand & Market Context */}
           <div className="flex items-center space-x-3">
@@ -103,7 +137,7 @@ export default function Header({
               title="Export matched settlement intervals to CSV"
             >
               <Download className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span>Export CSV</span>
             </button>
 
             {/* Institutional Segmented Theme Switcher */}
@@ -162,7 +196,141 @@ export default function Header({
           </div>
 
         </div>
+
+        {/* ═══════ MOBILE LAYOUT (<1024px) — Slim bar + Drawer ═══════ */}
+        <div className="lg:hidden">
+
+          {/* Slim Mobile Top Bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 shrink-0">
+                <Wind className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold tracking-tight text-textPrimary truncate">
+                  UK Day-Ahead Trading Cockpit
+                </h1>
+                <p className="text-[10px] text-textSecondary flex items-center gap-1.5 mt-0.5">
+                  <span className="text-emerald-500 font-mono flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping"></span>
+                    {dataSource || 'Elexon BMRS'}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Hamburger / Close Toggle */}
+            <div className="flex items-center gap-2">
+              {/* Compact theme toggle always visible on mobile */}
+              <button
+                type="button"
+                onClick={() => (onThemeChange ? onThemeChange(theme === 'dark' ? 'light' : 'dark') : onToggleTheme())}
+                className="p-2 rounded-lg bg-subtle border border-borderSubtle text-textSecondary hover:text-textPrimary transition-colors"
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-400" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="p-2 rounded-lg bg-subtle border border-borderSubtle text-textSecondary hover:text-textPrimary transition-colors"
+                aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              >
+                {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Slide-Down Drawer Panel */}
+          <div
+            className={`transition-all duration-300 ease-in-out overflow-hidden ${
+              mobileOpen ? 'max-h-[500px] opacity-100 mt-3' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="pt-3 border-t border-borderSubtle space-y-3">
+
+              {/* Quick Presets — 2x2 grid on mobile */}
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-textMuted mb-1.5 px-0.5">
+                  Quick Date Ranges
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {presets.map((preset) => {
+                    const isActive = startDate === preset.start && endDate === preset.end;
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() => handlePresetClick(preset.start, preset.end)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all text-center ${isActive
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 font-semibold'
+                            : 'bg-subtle text-textSecondary hover:text-textPrimary border border-borderSubtle hover:bg-hover'
+                          }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Date Range — Full Width */}
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-textMuted mb-1.5 px-0.5">
+                  Custom Range
+                </div>
+                <div className="flex items-center gap-2 bg-subtle px-3 py-2 rounded-lg border border-borderSubtle">
+                  <Calendar className="w-3.5 h-3.5 text-textMuted shrink-0" />
+                  <input
+                    type="date"
+                    value={startDate}
+                    min="2026-01-01"
+                    max="2026-01-31"
+                    onChange={(e) => onDateChange(e.target.value, endDate)}
+                    className="bg-transparent text-textPrimary focus:outline-none font-mono text-xs cursor-pointer flex-1 min-w-0"
+                    aria-label="Start Date"
+                  />
+                  <span className="text-textMuted text-xs">→</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    min="2026-01-01"
+                    max="2026-01-31"
+                    onChange={(e) => onDateChange(startDate, e.target.value)}
+                    className="bg-transparent text-textPrimary focus:outline-none font-mono text-xs cursor-pointer flex-1 min-w-0"
+                    aria-label="End Date"
+                  />
+                </div>
+              </div>
+
+              {/* Export CSV — Full Width */}
+              <button
+                onClick={() => { onExportCSV(); setMobileOpen(false); }}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-subtle hover:bg-hover border border-borderSubtle text-xs font-medium text-textPrimary transition-colors disabled:opacity-50"
+                title="Export matched settlement intervals to CSV"
+              >
+                <Download className="w-4 h-4 text-emerald-500" />
+                <span>Export Settlement Data (CSV)</span>
+              </button>
+
+            </div>
+          </div>
+
+        </div>
+
       </div>
+
+      {/* Backwards-compatible single toggle button — always available for automated scripts */}
+      <button
+        id="theme-toggle-btn"
+        type="button"
+        onClick={onToggleTheme}
+        className="sr-only"
+        aria-label="Toggle Theme"
+      >
+        Toggle
+      </button>
     </header>
   );
 }

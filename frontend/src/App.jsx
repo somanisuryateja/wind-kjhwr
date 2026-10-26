@@ -276,17 +276,18 @@ export default function App() {
       </main>
 
       {/* 3. Fluid Footer */}
-      <footer className="border-t border-borderSubtle bg-surface py-4 text-xs text-textMuted transition-colors">
-        <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            UK Energy Utility Day-Ahead Renewable Forecast System • January 2026 Elexon BMRS Stream
+      <footer className="border-t border-borderSubtle bg-surface py-3 sm:py-4 text-xs text-textMuted transition-colors">
+        <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2">
+          <div className="text-center sm:text-left">
+            <span className="hidden sm:inline">UK Energy Utility Day-Ahead Renewable Forecast System • January 2026 Elexon BMRS Stream</span>
+            <span className="sm:hidden">UK Energy Forecast • Jan 2026 Elexon BMRS</span>
           </div>
-          <div className="flex items-center gap-4 text-textSecondary font-mono text-[11px]">
-            <span>FastAPI Python 3.12</span>
+          <div className="flex items-center gap-3 sm:gap-4 text-textSecondary font-mono text-[10px] sm:text-[11px]">
+            <span>FastAPI</span>
             <span>•</span>
-            <span>React 18 Vite</span>
+            <span>React 18</span>
             <span>•</span>
-            <span>Docker Nginx</span>
+            <span>Docker</span>
           </div>
         </div>
       </footer>

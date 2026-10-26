@@ -62,3 +62,41 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ═══ Mobile-Specific Utilities ═══ */
+
+/* Hide scrollbar on horizontal scroll strips (metric ribbon ticker) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth scroll-snap for mobile ticker */
+.snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.snap-start {
+  scroll-snap-align: start;
+}
+.snap-mandatory {
+  scroll-snap-type: x mandatory;
+}
+
+/* Touch optimization for buttons */
+@media (hover: none) and (pointer: coarse) {
+  button, a, input[type="date"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Safe area padding for phones with notches / gesture bars */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  footer {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}

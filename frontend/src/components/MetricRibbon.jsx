@@ -18,100 +18,107 @@ export default function MetricRibbon({ metrics, loading }) {
 
   const isOverforecast = mean_bias_mw > 0;
 
+  const cards = [
+    {
+      icon: <Target className="w-3.5 h-3.5 text-emerald-500" />,
+      label: 'Mean Absolute Error',
+      value: loading ? '...' : mae_mw.toLocaleString(),
+      unit: 'MW',
+      sub: `${total_intervals} settlement periods`,
+      subColor: 'text-textMuted',
+      valueColor: 'text-textPrimary'
+    },
+    {
+      icon: <TrendingUp className="w-3.5 h-3.5 text-blue-500" />,
+      label: 'RMSE (Tail Volatility)',
+      value: loading ? '...' : rmse_mw.toLocaleString(),
+      unit: 'MW',
+      sub: `${mae_mw > 0 ? (rmse_mw / mae_mw).toFixed(2) : '1.00'}x RMSE/MAE ratio`,
+      subColor: 'text-blue-500',
+      valueColor: 'text-textPrimary'
+    },
+    {
+      icon: <Scale className="w-3.5 h-3.5 text-purple-500" />,
+      label: 'Percentage Error',
+      value: loading ? '...' : `${mape_pct.toFixed(1)}%`,
+      unit: 'MAPE',
+      sub: `${overforecast_percentage}% Over / ${underforecast_percentage}% Under`,
+      subColor: 'text-textMuted',
+      valueColor: 'text-textPrimary'
+    },
+    {
+      icon: <AlertTriangle className={`w-3.5 h-3.5 ${isOverforecast ? 'text-amber-500' : 'text-blue-500'}`} />,
+      label: 'Directional Bias (MBE)',
+      value: loading ? '...' : `${isOverforecast ? '+' : ''}${mean_bias_mw.toLocaleString()}`,
+      unit: 'MW',
+      sub: isOverforecast ? 'Over-forecast (Shortfall Risk)' : 'Under-forecast (Surplus Risk)',
+      subColor: isOverforecast ? 'text-amber-500' : 'text-blue-500',
+      valueColor: isOverforecast ? 'text-amber-500' : 'text-blue-500'
+    },
+    {
+      icon: <SunMedium className="w-3.5 h-3.5 text-amber-500" />,
+      label: 'Peak vs Off-Peak MAE',
+      value: loading ? '...' : `${peak_mae_mw.toLocaleString()}`,
+      unit: `/ ${loading ? '...' : offpeak_mae_mw.toLocaleString()} MW`,
+      sub: 'Peak: SP 15–38 (07:00–19:00 GMT)',
+      subColor: 'text-textMuted',
+      valueColor: 'text-textPrimary'
+    }
+  ];
+
   return (
     <div className="bg-subtle/70 border-b border-borderSubtle px-4 sm:px-6 py-3 transition-colors">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6 divide-y md:divide-y-0 md:divide-x divide-borderSubtle">
-        
-        {/* 1. MAE */}
-        <div className="flex flex-col justify-center">
-          <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
-            <Target className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Mean Absolute Error</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-textPrimary tracking-tight">
-              {loading ? '...' : mae_mw.toLocaleString()}
-            </span>
-            <span className="text-[11px] font-mono text-textMuted">MW</span>
-          </div>
-          <div className="text-[11px] text-textMuted mt-0.5">
-            {total_intervals} settlement periods
-          </div>
-        </div>
 
-        {/* 2. RMSE & Volatility */}
-        <div className="flex flex-col justify-center md:pl-4 lg:pl-6 pt-2 md:pt-0">
-          <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
-            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            <span>RMSE (Tail Volatility)</span>
+      {/* ═══ DESKTOP: Original grid layout (md+) ═══ */}
+      <div className="hidden md:grid md:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6 md:divide-x divide-borderSubtle">
+        {cards.map((card, i) => (
+          <div
+            key={i}
+            className={`flex flex-col justify-center ${i > 0 ? 'md:pl-4 lg:pl-6' : ''} ${i === 4 ? 'col-span-1' : ''}`}
+          >
+            <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
+              {card.icon}
+              <span>{card.label}</span>
+            </div>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className={`text-xl sm:text-2xl font-bold font-mono tracking-tight ${card.valueColor}`}>
+                {card.value}
+              </span>
+              <span className="text-[11px] font-mono text-textMuted">{card.unit}</span>
+            </div>
+            <div className={`text-[11px] ${card.subColor} mt-0.5`}>
+              {card.sub}
+            </div>
           </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-textPrimary tracking-tight">
-              {loading ? '...' : rmse_mw.toLocaleString()}
-            </span>
-            <span className="text-[11px] font-mono text-textMuted">MW</span>
-          </div>
-          <div className="text-[11px] text-blue-500 font-medium mt-0.5">
-            {mae_mw > 0 ? (rmse_mw / mae_mw).toFixed(2) : '1.00'}x RMSE/MAE ratio
-          </div>
-        </div>
-
-        {/* 3. MAPE */}
-        <div className="flex flex-col justify-center md:pl-4 lg:pl-6 pt-2 md:pt-0">
-          <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
-            <Scale className="w-3.5 h-3.5 text-purple-500" />
-            <span>Percentage Error</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-textPrimary tracking-tight">
-              {loading ? '...' : `${mape_pct.toFixed(1)}%`}
-            </span>
-            <span className="text-[11px] text-textMuted">MAPE</span>
-          </div>
-          <div className="text-[11px] text-textMuted mt-0.5">
-            {overforecast_percentage}% Over / {underforecast_percentage}% Under
-          </div>
-        </div>
-
-        {/* 4. Mean Bias Error */}
-        <div className="flex flex-col justify-center md:pl-4 lg:pl-6 pt-2 md:pt-0">
-          <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
-            <AlertTriangle className={`w-3.5 h-3.5 ${isOverforecast ? 'text-amber-500' : 'text-blue-500'}`} />
-            <span>Directional Bias (MBE)</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className={`text-xl sm:text-2xl font-bold font-mono tracking-tight ${
-              isOverforecast ? 'text-amber-500' : 'text-blue-500'
-            }`}>
-              {loading ? '...' : `${isOverforecast ? '+' : ''}${mean_bias_mw.toLocaleString()}`}
-            </span>
-            <span className="text-[11px] font-mono text-textMuted">MW</span>
-          </div>
-          <div className={`text-[11px] font-medium mt-0.5 ${isOverforecast ? 'text-amber-500' : 'text-blue-500'}`}>
-            {isOverforecast ? 'Over-forecast (Shortfall Risk)' : 'Under-forecast (Surplus Risk)'}
-          </div>
-        </div>
-
-        {/* 5. Peak vs Off-Peak */}
-        <div className="col-span-2 md:col-span-1 flex flex-col justify-center md:pl-4 lg:pl-6 pt-2 md:pt-0">
-          <div className="flex items-center gap-1.5 text-xs text-textSecondary font-medium">
-            <SunMedium className="w-3.5 h-3.5 text-amber-500" />
-            <span>Peak vs Off-Peak MAE</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-sm sm:text-base font-bold font-mono text-textPrimary">
-              {loading ? '...' : `${peak_mae_mw.toLocaleString()} MW`}
-            </span>
-            <span className="text-xs text-textMuted font-mono">
-              / {loading ? '...' : `${offpeak_mae_mw.toLocaleString()} MW`}
-            </span>
-          </div>
-          <div className="text-[11px] text-textMuted mt-0.5">
-            Peak: SP 15–38 (07:00–19:00 GMT)
-          </div>
-        </div>
-
+        ))}
       </div>
+
+      {/* ═══ MOBILE: Horizontal swipeable scroll strip (<md) ═══ */}
+      <div className="md:hidden -mx-4 px-4">
+        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-hide">
+          {cards.map((card, i) => (
+            <div
+              key={i}
+              className="snap-start shrink-0 min-w-[150px] max-w-[180px] bg-surface/60 rounded-xl border border-borderSubtle/60 p-3 space-y-1"
+            >
+              <div className="flex items-center gap-1 text-[10px] text-textSecondary font-medium">
+                {card.icon}
+                <span className="truncate">{card.label}</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className={`text-lg font-bold font-mono tracking-tight ${card.valueColor}`}>
+                  {card.value}
+                </span>
+                <span className="text-[10px] font-mono text-textMuted">{card.unit}</span>
+              </div>
+              <div className={`text-[10px] ${card.subColor} truncate`}>
+                {card.sub}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }

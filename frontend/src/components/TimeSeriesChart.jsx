@@ -21,7 +21,7 @@ export default function TimeSeriesChart({ data, metrics, loading, theme }) {
 
   if (loading) {
     return (
-      <div className="bg-surface border border-borderSubtle rounded-2xl h-[560px] flex items-center justify-center">
+      <div className="bg-surface border border-borderSubtle rounded-2xl h-[360px] sm:h-[560px] flex items-center justify-center">
         <div className="flex flex-col items-center space-y-3">
           <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-xs text-textSecondary font-mono">Loading settlement interval time series from Elexon BMRS...</p>
@@ -32,7 +32,7 @@ export default function TimeSeriesChart({ data, metrics, loading, theme }) {
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-surface border border-borderSubtle rounded-2xl h-[560px] flex items-center justify-center text-textMuted text-sm">
+      <div className="bg-surface border border-borderSubtle rounded-2xl h-[360px] sm:h-[560px] flex items-center justify-center text-textMuted text-sm">
         No settlement intervals found for selected date window.
       </div>
     );
@@ -61,75 +61,81 @@ export default function TimeSeriesChart({ data, metrics, loading, theme }) {
       <MetricRibbon metrics={metrics} loading={loading} />
 
       {/* 2. Chart Header & Controls */}
-      <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-borderSubtle/60">
-        <div>
-          <div className="flex items-center space-x-2">
-            <h2 className="text-base font-bold text-textPrimary tracking-tight">
-              National Wind Power Generation: Actual Outturn vs Day-Ahead Forecast
+      <div className="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 border-b border-borderSubtle/60">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-sm sm:text-base font-bold text-textPrimary tracking-tight truncate">
+              <span className="hidden sm:inline">National Wind Power Generation: Actual Outturn vs Day-Ahead Forecast</span>
+              <span className="sm:hidden">Wind Generation vs Forecast</span>
             </h2>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+            <span className="hidden sm:inline text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
               30-Min Resolution
             </span>
           </div>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Forecast matched against official 12:00 PM GMT D-1 Gate Closure. Intraday line captures weather updates.
+          <p className="text-[11px] sm:text-xs text-textSecondary mt-0.5 truncate">
+            <span className="hidden sm:inline">Forecast matched against official 12:00 PM GMT D-1 Gate Closure. Intraday line captures weather updates.</span>
+            <span className="sm:hidden">12:00 PM D-1 Gate Closure • 30-min intervals</span>
           </p>
         </div>
 
         {/* Series Toggles */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-xs">
           <button
             onClick={() => setShowActual(!showActual)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md border transition-all text-xs ${
               showActual
                 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 font-semibold'
                 : 'bg-subtle text-textMuted border-borderSubtle'
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Actual Outturn</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span className="hidden sm:inline">Actual Outturn</span>
+            <span className="sm:hidden">Actual</span>
           </button>
 
           <button
             onClick={() => setShowDayAhead(!showDayAhead)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md border transition-all text-xs ${
               showDayAhead
                 ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 font-semibold'
                 : 'bg-subtle text-textMuted border-borderSubtle'
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            <span>Day-Ahead (12:00 D-1)</span>
+            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+            <span className="hidden sm:inline">Day-Ahead (12:00 D-1)</span>
+            <span className="sm:hidden">D-1</span>
           </button>
 
           <button
             onClick={() => setShowLatest(!showLatest)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md border transition-all text-xs ${
               showLatest
                 ? 'bg-purple-500/10 text-purple-500 border-purple-500/30 font-semibold'
                 : 'bg-subtle text-textMuted border-borderSubtle'
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-            <span>Intraday Latest</span>
+            <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
+            <span className="hidden sm:inline">Intraday Latest</span>
+            <span className="sm:hidden">Latest</span>
           </button>
 
           <button
             onClick={() => setShowErrorBar(!showErrorBar)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md border transition-all text-xs ${
               showErrorBar
                 ? 'bg-blue-500/10 text-blue-500 border-blue-500/30 font-semibold'
                 : 'bg-subtle text-textMuted border-borderSubtle'
             }`}
           >
             <BarChart2 className="w-3.5 h-3.5" />
-            <span>Residual Error</span>
+            <span className="hidden sm:inline">Residual Error</span>
+            <span className="sm:hidden">Error</span>
           </button>
         </div>
       </div>
 
       {/* 3. Hero Visualizer Canvas */}
-      <div className="h-[460px] sm:h-[480px] w-full px-2 sm:px-4 py-4">
+      <div className="h-[280px] sm:h-[460px] md:h-[480px] w-full px-1 sm:px-4 py-3 sm:py-4">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={formattedData} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
             <defs>
