@@ -1,13 +1,11 @@
-import { useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarClock, CheckCircle2, MoveVertical, Wind } from 'lucide-react';
 import { Card, Stat, Status } from './ui';
-import { FIRST_DAY, LAST_DAY, average, dayLabel, hhmm, mw, shiftDay, useApi } from './lib';
+import { average, dayLabel, hhmm, mw, useApi } from './lib';
 
 const axis = { tick: { fontSize: 12, fill: '#64748b' }, tickLine: false };
 
-export default function ForecastSection({ decisionHour }) {
-  const [day, setDay] = useState('2026-01-15');
+export default function ForecastSection({ day, decisionHour }) {
   const { data, loading, error } = useApi(`/forecast?date=${day}&decision_hour=${decisionHour}`);
 
   const points = data?.points ?? [];
@@ -16,34 +14,16 @@ export default function ForecastSection({ decisionHour }) {
 
   return (
     <Card
-      step={1}
+      step={2}
       icon={CalendarClock}
-      title="Forecast at decision time"
-      description="The latest wind forecast the desk had when buying for a delivery day, with the actual outturn shown afterwards for comparison."
+      title="The forecast behind the plan"
+      description="The latest wind forecast the desk had when buying for this delivery day, its likely range, and the actual outturn afterwards."
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-slate-600">Delivery day</span>
-        <DayButton disabled={day <= FIRST_DAY} onClick={() => setDay(shiftDay(day, -1))} label="Previous day">
-          ‹
-        </DayButton>
-        <input
-          type="date"
-          value={day}
-          min={FIRST_DAY}
-          max={LAST_DAY}
-          onChange={(e) => e.target.value && setDay(e.target.value)}
-          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-        />
-        <DayButton disabled={day >= LAST_DAY} onClick={() => setDay(shiftDay(day, 1))} label="Next day">
-          ›
-        </DayButton>
-      </div>
-
       <Status loading={loading && !data} error={error} />
 
       {data && (
         <div className={loading ? 'opacity-60' : ''}>
-          <p className="mt-4 text-sm text-slate-700">
+          <p className="text-sm text-slate-700">
             {data.forecast_published ? (
               <>
                 For <b>{dayLabel(data.date)}</b>, the latest forecast at <b>{hhmm(data.decision_time)}</b> on{' '}
@@ -101,19 +81,6 @@ export default function ForecastSection({ decisionHour }) {
         </div>
       )}
     </Card>
-  );
-}
-
-function DayButton({ children, label, ...props }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className="rounded-md border border-slate-300 px-2.5 py-1 text-sm hover:bg-slate-50 disabled:opacity-40"
-      {...props}
-    >
-      {children}
-    </button>
   );
 }
 

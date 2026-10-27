@@ -3,11 +3,13 @@ import { Clock, Wind } from 'lucide-react';
 import ForecastSection from './ForecastSection';
 import AccuracySection from './AccuracySection';
 import KeyFinding from './KeyFinding';
+import PlanSection from './PlanSection';
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 export default function App() {
   const [decisionHour, setDecisionHour] = useState(9);
+  const [day, setDay] = useState('2026-01-15');
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -44,8 +46,9 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6">
+        <PlanSection day={day} setDay={setDay} decisionHour={decisionHour} />
         <KeyFinding decisionHour={decisionHour} />
-        <ForecastSection decisionHour={decisionHour} />
+        <ForecastSection day={day} decisionHour={decisionHour} />
         <AccuracySection decisionHour={decisionHour} />
       </main>
 

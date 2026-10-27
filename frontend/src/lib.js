@@ -6,16 +6,24 @@ export const FIRST_DAY = '2026-01-02';
 export const LAST_DAY = '2026-02-01';
 
 // Fetch JSON from the backend. No fallback data: if the API fails, the page says so.
+// Pass a null path to skip the request (e.g. while an input is invalid).
 export function useApi(path) {
   const [state, setState] = useState({ data: null, error: null, loading: true });
 
   useEffect(() => {
+    if (!path) {
+      setState({ data: null, error: null, loading: false });
+      return;
+    }
     let live = true;
     setState((s) => ({ ...s, loading: true, error: null }));
     fetch(`${API_BASE}${path}`)
       .then(async (res) => {
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+        if (!res.ok) {
+          const detail = Array.isArray(body.detail) ? body.detail.map((d) => d.msg).join('; ') : body.detail;
+          throw new Error(detail || `Request failed (${res.status})`);
+        }
         return body;
       })
       .then((data) => live && setState({ data, error: null, loading: false }))
@@ -53,3 +61,15 @@ export const average = (xs) => {
   const v = xs.filter((x) => x != null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 };
+
+// Value that only updates after the input has been still for `ms`, so typing doesn't fire a request per key.
+export function useDebounced(value, ms = 400) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return settled;
+}
+
+export const gwh = (mwh) => (mwh == null ? '–' : (mwh / 1000).toLocaleString('en-GB', { maximumFractionDigits: 1 }));

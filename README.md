@@ -1,6 +1,6 @@
 # UK Wind Forecast Monitor
 
-A small web app for a UK utility's day-ahead power desk. It answers two questions using Elexon BMRS national wind data:
+A small web app for a UK utility's day-ahead power desk. Pick a delivery day and how sure you want to be, and it tells you **how much power to buy beyond wind**, hour by hour, using Elexon BMRS national wind data. Behind that plan it answers two questions:
 
 1. **What wind forecast did we have when we had to buy?** For any delivery day, it shows the latest forecast available at the purchase decision time (default 09:00 the day before), a likely range for the actual outturn, and the actual outturn afterwards.
 2. **How accurate is that forecast?** It shows the error of the decision-time forecast (MAE, bias, median, RMSE, 10th/90th percentiles), how error changes with forecast lead time, and how errors are distributed.
@@ -9,7 +9,7 @@ A small web app for a UK utility's day-ahead power desk. It answers two question
 
 **Hosting note:** the brief suggests Vercel or Heroku. I hosted it on my own Oracle Cloud VM instead (nginx serving the React build, FastAPI under systemd, HTTPS via Let's Encrypt). It deploys the same way a PaaS would: every push to `main` runs a GitHub Actions workflow ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) that builds the frontend, syncs the backend, restarts the service and then smoke-tests the live API. Docker Compose is still included for running everything locally.
 
-Stack: React 18 + Vite + Tailwind + Recharts (frontend), Python 3.12 + FastAPI (backend), Docker Compose.
+Stack: React 18 + Vite 8 + Tailwind + Recharts (frontend), Python 3.12 + FastAPI (backend), Docker Compose.
 
 ## Run it
 
@@ -57,9 +57,10 @@ backend/
   Dockerfile
 frontend/
   src/App.jsx              Page layout, header and the shared decision-time setting
+  src/PlanSection.jsx      Step 1: date, confidence and demand in; MW to buy, hourly chart and CSV out
   src/KeyFinding.jsx       Headline banner: the forecast's average bias, computed live
-  src/ForecastSection.jsx  Section 1: forecast at decision time
-  src/AccuracySection.jsx  Section 2: forecast accuracy
+  src/ForecastSection.jsx  Step 2: the forecast behind the plan
+  src/AccuracySection.jsx  Step 3: forecast accuracy
   src/ui.jsx               Card, Stat and Status building blocks
   src/lib.js               API hook and number/date formatting
   nginx/security.conf      Security headers, hidden-file blocking (used on the server and in Docker)
@@ -77,7 +78,8 @@ To refresh the data, delete `backend/data/*.json` and run `python -m app.data` f
 - **Which data.** The brief limits us to purchase decisions made in January 2026. Power is bought the day before delivery, so that covers **delivery days 2 Jan to 1 Feb 2026**. Actuals come from FUELHH (`fuelType = WIND`), and forecasts from WINDFOR.
 - **Decision-time forecast.** For delivery day D and decision hour H, each target hour uses the most recent WINDFOR forecast published at or before H:00 on D-1. H is a setting in the UI (default 09:00) because the right value depends on which auction the desk trades. January is GMT, so UK time equals UTC.
 - **Error.** Error = actual − forecast. Negative means less wind than forecast, so more power to buy. WINDFOR is hourly, so errors are scored at the 744 hourly points. Forecasts published after their target time (about 4,000 rows in the raw feed) are excluded.
-- **Likely range.** The shaded band in section 1 is the forecast plus the 10th and 90th percentile of January's decision-time errors. It uses the whole period, so a day's own errors count toward its band. For a live tool, switch to a trailing window.
+- **Likely range.** The shaded band in Step 2 is the forecast plus the 10th and 90th percentile of January's decision-time errors. It uses the whole period, so a day's own errors count toward its band. For a live tool, switch to a trailing window.
+- **Purchase plan.** Wind you can count on = forecast + the error percentile for the chosen confidence (50% uses the median error, 80% the 20th percentile, 90% the 10th percentile). Power to buy = demand − wind you can count on, per hour. Demand is a number the desk enters, because the brief allows no data beyond Elexon wind; it is held flat across the day. The "how this plan turned out" card replays the plan against actual wind in hindsight.
 - **Lead time.** Every forecast run (not only the decision-time one) is grouped by hours between publish time and target time: 0–4, 4–8, 8–12, 12–24, 24–36 and 36–48h.
 
 ### What the data shows (09:00 decision time, full period)
@@ -101,6 +103,7 @@ To refresh the data, delete `backend/data/*.json` and run `python -m app.data` f
 | Endpoint | Params | Returns |
 | --- | --- | --- |
 | `GET /api/forecast` | `date` (YYYY-MM-DD), `decision_hour` (0–23, default 9) | 48 half-hour points with forecast, likely range and actual, plus the forecast publish time |
+| `GET /api/plan` | `date`, `decision_hour`, `confidence` (50/80/90, default 90), `demand_mw` (0–100,000) | Hourly plan (forecast, wind counted on, MW to buy, actual, shortfall) and day totals |
 | `GET /api/accuracy` | `start`, `end`, `decision_hour` | Error summary, histogram (500 MW bins), errors by lead time |
 | `GET /api/health` | | `{"status": "healthy"}` |
 

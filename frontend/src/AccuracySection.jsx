@@ -14,7 +14,7 @@ export default function AccuracySection({ decisionHour }) {
 
   return (
     <Card
-      step={2}
+      step={3}
       icon={BarChart3}
       title="Forecast accuracy"
       description="How far actual wind landed from the forecast available at decision time. Error = actual − forecast, so a negative error means less wind than forecast and more power to buy."

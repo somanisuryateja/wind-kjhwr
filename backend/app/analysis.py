@@ -62,6 +62,7 @@ def summarize(errors: list[float]) -> dict:
         "rmse": sqrt(mean(e * e for e in errors)),
         "bias": mean(errors),
         "p10": deciles[0],
+        "p20": deciles[1],
         "p50": deciles[4],
         "p90": deciles[8],
         "share_below": sum(e < 0 for e in errors) / len(errors),  # hours with less wind than forecast
@@ -121,3 +122,48 @@ def day_view(day: date, hour: int, actuals: dict, runs, band: dict) -> dict:
                 point["range_mw"] = [max(0, fc[1] + band["p10"]), fc[1] + band["p90"]]
         points.append(point)
     return {"date": day.isoformat(), "decision_time": cutoff, "forecast_published": published, "points": points}
+
+
+# Confidence that actual wind is at least the planned amount -> which error percentile to plan on.
+# 90% confidence means planning on the 10th percentile error: only 1 hour in 10 had a bigger shortfall.
+CONFIDENCE_PERCENTILE = {50: "p50", 80: "p20", 90: "p10"}
+
+
+def purchase_plan(view: dict, band: dict, confidence: int, demand_mw: float) -> dict:
+    """Hour-by-hour buying plan for one delivery day.
+
+    Wind we can count on = forecast + the error percentile for the chosen confidence.
+    Power to buy = demand - wind we can count on. Actuals are used only to show, in hindsight,
+    how the plan would have turned out.
+    """
+    # ponytail: one flat demand figure for the whole day. Take an hourly demand profile if the desk has one.
+    shift = band[CONFIDENCE_PERCENTILE[confidence]]
+    hours = []
+    for p in view["points"]:
+        if p["forecast_mw"] is None:  # forecasts are hourly
+            continue
+        firm = max(0.0, p["forecast_mw"] + shift)
+        actual = p["actual_mw"]
+        hours.append({
+            "time": p["time"],
+            "forecast_mw": p["forecast_mw"],
+            "firm_wind_mw": firm,
+            "buy_mw": max(0.0, demand_mw - firm),
+            "actual_mw": actual,
+            # Planned on more wind than actually came: this gap had to be bought at short notice.
+            "shortfall_mw": max(0.0, firm - actual) if actual is not None else None,
+        })
+
+    scored = [h for h in hours if h["shortfall_mw"] is not None]
+    return {
+        "hours": hours,
+        "totals": {
+            "buy_mwh": sum(h["buy_mw"] for h in hours),  # hourly blocks, so MW x 1h = MWh
+            "avg_buy_mw": mean(h["buy_mw"] for h in hours) if hours else None,
+            "avg_firm_wind_mw": mean(h["firm_wind_mw"] for h in hours) if hours else None,
+            "avg_forecast_mw": mean(h["forecast_mw"] for h in hours) if hours else None,
+            "hours_planned": len(hours),
+            "hours_short": sum(h["shortfall_mw"] > 0 for h in scored),
+            "shortfall_mwh": sum(h["shortfall_mw"] for h in scored),
+        },
+    }

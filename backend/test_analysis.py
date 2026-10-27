@@ -39,6 +39,22 @@ def test_lead_time_buckets_drop_forecasts_published_after_target():
     assert sum(r["n"] for r in rows.values()) == 2
 
 
+def test_purchase_plan():
+    view = {"points": [
+        {"time": "T00", "forecast_mw": 10_000, "actual_mw": 7_000},
+        {"time": "T00:30", "forecast_mw": None, "actual_mw": 7_100},  # half-hour, no forecast: skipped
+        {"time": "T01", "forecast_mw": 1_000, "actual_mw": 2_000},
+    ]}
+    band = {"p10": -2_000, "p20": -1_000, "p50": -500}
+    plan = a.purchase_plan(view, band, confidence=90, demand_mw=30_000)
+    h0, h1 = plan["hours"]
+    assert (h0["firm_wind_mw"], h0["buy_mw"], h0["shortfall_mw"]) == (8_000, 22_000, 1_000)
+    assert (h1["firm_wind_mw"], h1["buy_mw"], h1["shortfall_mw"]) == (0, 30_000, 0)  # never plan negative wind
+    assert plan["totals"]["buy_mwh"] == 52_000
+    assert plan["totals"]["hours_short"] == 1 and plan["totals"]["shortfall_mwh"] == 1_000
+    assert a.purchase_plan(view, band, confidence=50, demand_mw=0)["totals"]["buy_mwh"] == 0
+
+
 def test_histogram_fills_empty_bins():
     assert a.histogram([-600, 10, 1100]) == [
         {"from_mw": -1000, "count": 1}, {"from_mw": -500, "count": 0}, {"from_mw": 0, "count": 1},

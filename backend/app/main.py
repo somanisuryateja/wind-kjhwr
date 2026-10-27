@@ -50,6 +50,29 @@ def forecast(day: str = Query(..., alias="date", description="Delivery day, YYYY
     return {**view, "band": band}
 
 
+@app.get("/api/plan")
+def plan(
+    day: str = Query(..., alias="date", description="Delivery day, YYYY-MM-DD"),
+    decision_hour: int = DecisionHour,
+    confidence: int = Query(90, description="Chance (50, 80 or 90 %) that actual wind is at least the planned amount"),
+    demand_mw: float = Query(..., ge=0, le=100_000, description="Demand to cover, in MW (entered by the desk)"),
+):
+    """How much power to buy beyond wind for one delivery day, hour by hour."""
+    if confidence not in analysis.CONFIDENCE_PERCENTILE:
+        raise HTTPException(400, "Confidence must be 50, 80 or 90.")
+    band = january_band(decision_hour)
+    view = analysis.day_view(delivery_day(day), decision_hour, data.actuals(), runs(), band)
+    result = analysis.purchase_plan(view, band, confidence, demand_mw)
+    return {
+        "date": view["date"],
+        "decision_time": view["decision_time"],
+        "forecast_published": view["forecast_published"],
+        "confidence": confidence,
+        "demand_mw": demand_mw,
+        **result,
+    }
+
+
 @app.get("/api/accuracy")
 def accuracy(start: str = data.FIRST_DELIVERY_DAY, end: str = data.LAST_DELIVERY_DAY, decision_hour: int = DecisionHour):
     first, last = delivery_day(start), delivery_day(end)
