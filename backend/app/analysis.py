@@ -64,6 +64,7 @@ def summarize(errors: list[float]) -> dict:
         "p10": deciles[0],
         "p50": deciles[4],
         "p90": deciles[8],
+        "share_below": sum(e < 0 for e in errors) / len(errors),  # hours with less wind than forecast
     }
 
 

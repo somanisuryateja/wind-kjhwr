@@ -1,76 +1,150 @@
-name: Deploy UK Wind Forecast Portal to Oracle Cloud Server
+name: Test and deploy to Oracle Cloud
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 20
-          cache: 'npm'
+          python-version: '3.10' # same as the Oracle VM
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Backend tests
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          python test_analysis.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build Frontend Bundle
+      - name: Frontend audit and build
+        working-directory: frontend
         run: |
-          cd frontend
-          npm ci || npm install
+          npm ci
+          npm audit --audit-level=high
           npm run build
 
-      - name: Deploy to Oracle Cloud VM via SSH
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.SERVER_HOST }}
+      USER: ${{ secrets.SERVER_USER }}
+      # The server's public SSH host key, so the deploy refuses to talk to an impostor.
+      # If the server is rebuilt, update this line with: ssh-keyscan -t ed25519 <server-ip>
+      KNOWN_HOST: '140.245.203.191,wind.suryadeals.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPC1XzO7g9v2g8VDOi7ofoSMvm8EkaT2Al5MeO8docW1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up SSH
         env:
           SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          HOST: ${{ secrets.SERVER_HOST }}
-          USER: ${{ secrets.SERVER_USER }}
         run: |
-          if [ -z "$SSH_KEY" ] || [ -z "$HOST" ]; then
-            echo "Error: Secrets SSH_PRIVATE_KEY or SERVER_HOST not configured on this repository."
+          if [ -z "$SSH_KEY" ] || [ -z "$HOST" ] || [ -z "$USER" ]; then
+            echo "Missing secrets: SSH_PRIVATE_KEY, SERVER_HOST or SERVER_USER."
             exit 1
           fi
-
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          echo "$KNOWN_HOST" > ~/.ssh/known_hosts
+          printf 'Host *\n  StrictHostKeyChecking yes\n  ConnectTimeout 15\n' > ~/.ssh/config
 
-          # 1. Rsync built frontend dist directly to /var/www/wind/
-          echo "Deploying frontend assets to /var/www/wind/..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 $USER@$HOST "sudo mkdir -p /var/www/wind && sudo chown -R $USER:$USER /var/www/wind"
-          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" frontend/dist/ $USER@$HOST:/var/www/wind/
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo chown -R www-data:www-data /var/www/wind && sudo chmod -R 755 /var/www/wind"
-
-          # 2. Rsync backend code to /opt/wind-backend/
-          echo "Syncing backend to /opt/wind-backend/..."
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "sudo mkdir -p /opt/wind-backend && sudo chown -R $USER:$USER /opt/wind-backend"
-          rsync -avz --delete --exclude 'venv' --exclude '__pycache__' --exclude 'data/cache' -e "ssh -o StrictHostKeyChecking=no" backend/ $USER@$HOST:/opt/wind-backend/
-
-          # 3. Restart FastAPI backend service and reload Nginx
-          echo "Restarting backend and reloading Nginx..."
-          ssh -o StrictHostKeyChecking=no $USER@$HOST "
-            cd /opt/wind-backend
-            if [ -d 'venv' ]; then
-              source venv/bin/activate
-              pip install -r requirements.txt
-            fi
-            sudo systemctl restart wind-backend
-            sudo systemctl reload nginx
-          "
-          echo "Deployment completed successfully!"
-
-      - name: Smoke test live site
+      - name: Deploy frontend
         run: |
-          # Fails the run if the server is still running an old backend (e.g. the
-          # systemd service points at a different folder than /opt/wind-backend).
+          ssh $USER@$HOST "sudo mkdir -p /var/www/wind && sudo chown -R $USER:$USER /var/www/wind"
+          rsync -az --delete frontend/dist/ $USER@$HOST:/var/www/wind/
+          ssh $USER@$HOST "sudo chown -R www-data:www-data /var/www/wind && sudo chmod -R 755 /var/www/wind"
+
+      - name: Deploy backend
+        run: |
+          ssh $USER@$HOST "sudo mkdir -p /opt/wind-backend && sudo chown -R $USER:$USER /opt/wind-backend"
+          rsync -az --delete --exclude venv --exclude __pycache__ --exclude data/cache backend/ $USER@$HOST:/opt/wind-backend/
+          ssh $USER@$HOST "
+            cd /opt/wind-backend
+            if [ -d venv ]; then venv/bin/pip install -q -r requirements.txt; fi
+            sudo systemctl restart wind-backend
+          "
+
+      - name: Apply nginx security headers and rate limit
+        run: |
+          scp frontend/nginx/security.conf frontend/nginx/rate-limit.conf $USER@$HOST:/tmp/
+          ssh $USER@$HOST 'bash -s' <<'EOF'
+          set -eu
+          SNIPPET=/etc/nginx/snippets/wind-security.conf
+          LIMITS=/etc/nginx/conf.d/wind-rate-limit.conf
+          SITE=$(readlink -f "$(grep -ls 'server_name wind.suryadeals.com' /etc/nginx/sites-enabled/* | head -1)")
+          [ -f "$SITE" ] || { echo "No nginx site config for wind.suryadeals.com"; exit 1; }
+
+          # Back up everything we touch, so a bad config can be rolled back.
+          for f in "$SITE" "$SNIPPET" "$LIMITS"; do [ -f "$f" ] && sudo cp "$f" "$f.bak" || true; done
+          rollback() {
+            for f in "$SITE" "$SNIPPET" "$LIMITS"; do
+              if [ -f "$f.bak" ]; then sudo mv "$f.bak" "$f"; else sudo rm -f "$f"; fi
+            done
+          }
+
+          sudo install -m 644 /tmp/security.conf "$SNIPPET"
+          sudo install -m 644 /tmp/rate-limit.conf "$LIMITS"
+          # One-time edits to the site config (skipped when already present).
+          grep -q 'wind-security.conf' "$SITE" || \
+            sudo sed -i 's|^\(\s*\)server_name wind.suryadeals.com;|&\n\1include snippets/wind-security.conf;|' "$SITE"
+          grep -q 'zone=wind_api' "$SITE" || \
+            sudo sed -i 's|^\(\s*\)location /api/ {|&\n\1    limit_req zone=wind_api burst=20 nodelay;|' "$SITE"
+
+          if sudo nginx -t; then
+            sudo systemctl reload nginx
+            sudo rm -f "$SITE.bak" "$SNIPPET.bak" "$LIMITS.bak"
+          else
+            echo "nginx rejected the new config, rolling back"
+            rollback
+            sudo nginx -t
+            exit 1
+          fi
+          EOF
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check live site
+        run: |
           sleep 5
-          curl -fsS https://wind.suryadeals.com/api/health
-          curl -fsS -o /dev/null "https://wind.suryadeals.com/api/forecast?date=2026-01-15"
-          curl -fsS -o /dev/null "https://wind.suryadeals.com/api/accuracy"
-          echo "Live API OK"
+          SITE=https://wind.suryadeals.com
+          curl -fsS "$SITE/api/health"
+          curl -fsS -o /dev/null "$SITE/api/forecast?date=2026-01-15"
+          curl -fsS -o /dev/null "$SITE/api/accuracy"
+
+          headers=$(curl -fsSI "$SITE/")
+          for h in strict-transport-security content-security-policy x-content-type-options x-frame-options; do
+            echo "$headers" | grep -qi "^$h:" || { echo "Missing header: $h"; exit 1; }
+          done
+          echo "$headers" | grep -qi '^server: nginx/' && { echo "nginx version is exposed"; exit 1; }
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$SITE/.env")" = 404 ] || { echo "/.env is not 404"; exit 1; }
+          echo "Live site OK"

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity, BarChart3, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, Stat, Status } from './ui';
 import { FIRST_DAY, LAST_DAY, mw, signedMw, useApi } from './lib';
 
@@ -13,6 +14,8 @@ export default function AccuracySection({ decisionHour }) {
 
   return (
     <Card
+      step={2}
+      icon={BarChart3}
       title="Forecast accuracy"
       description="How far actual wind landed from the forecast available at decision time. Error = actual − forecast, so a negative error means less wind than forecast and more power to buy."
     >
@@ -45,14 +48,16 @@ export default function AccuracySection({ decisionHour }) {
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Typical error (MAE)" value={`${mw(s.mae)} MW`} note="Average size of the miss" />
+            <Stat label="Typical error (MAE)" value={`${mw(s.mae)} MW`} note="Average size of the miss" icon={Target} tone="violet" />
             <Stat
               label="Bias"
               value={`${signedMw(s.bias)} MW`}
               note={s.bias < 0 ? 'Forecast too high on average' : 'Forecast too low on average'}
+              icon={s.bias < 0 ? TrendingDown : TrendingUp}
+              tone="amber"
             />
-            <Stat label="Median error" value={`${signedMw(s.p50)} MW`} note="Half of hours above, half below" />
-            <Stat label="RMSE" value={`${mw(s.rmse)} MW`} note="Weights big misses more" />
+            <Stat label="Median error" value={`${signedMw(s.p50)} MW`} note="Half of hours above, half below" icon={TrendingDown} tone="amber" />
+            <Stat label="RMSE" value={`${mw(s.rmse)} MW`} note="Weights big misses more" icon={Activity} tone="slate" />
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">

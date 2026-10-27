@@ -56,12 +56,17 @@ backend/
   test_analysis.py     Unit tests for the analysis functions
   Dockerfile
 frontend/
-  src/App.jsx              Page layout and the shared decision-time setting
+  src/App.jsx              Page layout, header and the shared decision-time setting
+  src/KeyFinding.jsx       Headline banner: the forecast's average bias, computed live
   src/ForecastSection.jsx  Section 1: forecast at decision time
   src/AccuracySection.jsx  Section 2: forecast accuracy
   src/ui.jsx               Card, Stat and Status building blocks
   src/lib.js               API hook and number/date formatting
-  Dockerfile, nginx.conf   Static build served by nginx, /api proxied to the backend
+  nginx/security.conf      Security headers, hidden-file blocking (used on the server and in Docker)
+  nginx/rate-limit.conf    Per-IP API rate limit (10 requests/s, burst 20)
+  nginx/default.conf       Docker-only nginx site: static build plus /api proxy
+  Dockerfile               Builds the app, serves it with unprivileged nginx on port 8080
+.github/workflows/deploy.yml  Test, deploy to the Oracle VM, then smoke-test the live site
 docker-compose.yml
 ```
 
@@ -79,6 +84,17 @@ To refresh the data, delete `backend/data/*.json` and run `python -m app.data` f
 
 - Typical error (MAE) is about 2,000 MW. In 8 of 10 hours, actual wind was between about 4,150 MW below and 430 MW above the forecast.
 - The forecast is **biased high by about 1,750 MW**, and the bias barely shrinks at short lead times (still about 1,430 MW at 0–4h, against 1,900 MW at 36–48h). That points to a systematic gap between what WINDFOR forecasts and what FUELHH meters, for example curtailed wind, rather than weather uncertainty. For buying, this means the raw forecast overstates the wind you can count on.
+
+## Security and production setup
+
+- **Read-only public data, no logins.** The API only answers GET requests about public Elexon data, so there is no user data to protect.
+- **Input validation.** Dates and decision hours are checked; anything else gets a 400/422 with a readable message.
+- **HTTPS** with a Let's Encrypt certificate, and HTTP redirects to HTTPS.
+- **Security headers** (HSTS, Content-Security-Policy, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy), with the nginx version hidden and `/.env`-style paths returning 404.
+- **Rate limit** of 10 API requests per second per IP (burst 20); excess requests get 429.
+- **Pinned dependencies:** exact Python versions in `requirements.txt`, and `package-lock.json` with `npm ci`. CI fails on any high-severity `npm audit` finding.
+- **Containers run as non-root users.**
+- **CI/CD:** every push runs the tests and a production build first. Deploy only happens if they pass. The deploy checks the server's SSH host key, applies the nginx config with an automatic rollback if `nginx -t` fails, and a final job checks the live API and the security headers.
 
 ## API
 

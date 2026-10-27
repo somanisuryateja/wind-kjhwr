@@ -23,6 +23,7 @@ def test_summarize():
     s = a.summarize([-200, 200, 0, 400])
     assert s["mae"] == 200 and s["bias"] == 100 and s["rmse"] == (240000 / 4) ** 0.5
     assert s["p10"] < s["p50"] < s["p90"]
+    assert s["share_below"] == 0.25
     assert a.summarize([5]) == {"n": 1}
 
 

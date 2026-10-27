@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CalendarClock, CheckCircle2, MoveVertical, Wind } from 'lucide-react';
 import { Card, Stat, Status } from './ui';
 import { FIRST_DAY, LAST_DAY, average, dayLabel, hhmm, mw, shiftDay, useApi } from './lib';
 
@@ -15,6 +16,8 @@ export default function ForecastSection({ decisionHour }) {
 
   return (
     <Card
+      step={1}
+      icon={CalendarClock}
       title="Forecast at decision time"
       description="The latest wind forecast the desk had when buying for a delivery day, with the actual outturn shown afterwards for comparison."
     >
@@ -52,16 +55,26 @@ export default function ForecastSection({ decisionHour }) {
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Stat label="Forecast, daily average" value={`${mw(average(points.map((p) => p.forecast_mw)))} MW`} />
+            <Stat
+              label="Forecast, daily average"
+              value={`${mw(average(points.map((p) => p.forecast_mw)))} MW`}
+              note="What the desk saw when buying"
+              icon={Wind}
+              tone="blue"
+            />
             <Stat
               label="Likely actual, daily average"
               value={`${mw(low)} – ${mw(high)} MW`}
               note="8 in 10 hours, based on January's errors"
+              icon={MoveVertical}
+              tone="sky"
             />
             <Stat
               label="Actual, daily average"
               value={`${mw(average(points.map((p) => p.actual_mw)))} MW`}
               note="Known only after delivery"
+              icon={CheckCircle2}
+              tone="slate"
             />
           </div>
 
