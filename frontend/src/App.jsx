@@ -53,8 +53,7 @@ export default function App() {
       </main>
 
       <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500">
-        Data: Elexon BMRS FUELHH (actual wind, half-hourly) and WINDFOR (wind forecast, hourly). Purchase decisions made in
-        January 2026. Times are UK time (GMT).
+        Elexon BMRS · FUELHH and WINDFOR · Decisions made in January 2026 · UK time
       </footer>
     </div>
   );

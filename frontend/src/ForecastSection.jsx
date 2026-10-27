@@ -17,7 +17,7 @@ export default function ForecastSection({ day, decisionHour }) {
       step={2}
       icon={CalendarClock}
       title="The forecast behind the plan"
-      description="The latest wind forecast the desk had when buying for this delivery day, its likely range, and the actual outturn afterwards."
+      info="The latest WINDFOR forecast published before your decision time, with its likely range and the actual wind (FUELHH) for comparison. MW, UK time. Forecasts are hourly; actuals are half-hourly."
     >
       <Status loading={loading && !data} error={error} />
 
@@ -38,21 +38,20 @@ export default function ForecastSection({ day, decisionHour }) {
             <Stat
               label="Forecast, daily average"
               value={`${mw(average(points.map((p) => p.forecast_mw)))} MW`}
-              note="What the desk saw when buying"
               icon={Wind}
               tone="blue"
             />
             <Stat
               label="Likely actual, daily average"
               value={`${mw(low)} – ${mw(high)} MW`}
-              note="8 in 10 hours, based on January's errors"
+              info="Where actual wind landed in 8 of 10 hours in January, given this forecast (10th to 90th percentile of past errors)."
               icon={MoveVertical}
               tone="sky"
             />
             <Stat
               label="Actual, daily average"
               value={`${mw(average(points.map((p) => p.actual_mw)))} MW`}
-              note="Known only after delivery"
+              info="Measured wind (FUELHH). Not known at decision time; shown for comparison."
               icon={CheckCircle2}
               tone="slate"
             />

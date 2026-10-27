@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CheckCircle2, ChevronLeft, ChevronRight, Download, ShoppingCart, TriangleAlert, Wind } from 'lucide-react';
-import { Status } from './ui';
+import { InfoTip, Status } from './ui';
 import { FIRST_DAY, LAST_DAY, dayLabel, gwh, hhmm, mw, shiftDay, useApi, useDebounced } from './lib';
 
 const CONFIDENCE = [
@@ -25,15 +25,14 @@ export default function PlanSection({ day, setDay, decisionHour }) {
   const t = data?.totals;
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
-      <div className="h-1.5 bg-gradient-to-r from-sky-500 via-blue-600 to-amber-500" />
+    <section className="rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
+      <div className="h-1.5 rounded-t-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-amber-500" />
       <div className="p-5 sm:p-7">
         <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Step 1 · Plan your purchase</div>
-        <h2 className="mt-1 text-2xl font-semibold">How much power should you buy?</h2>
-        <p className="mt-1 text-slate-600">
-          Pick a delivery day and how sure you want to be. The plan uses the wind forecast you would have had at decision
-          time, adjusted by how far off it has been.
-        </p>
+        <h2 className="mt-1 flex items-center gap-2 text-2xl font-semibold">
+          How much power should you buy?{' '}
+          <InfoTip text="Uses the latest wind forecast available at your decision time, lowered by how far off the forecast was in January. Power to buy = demand − wind you can count on." />
+        </h2>
 
         {/* Inputs */}
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -57,7 +56,10 @@ export default function PlanSection({ day, setDay, decisionHour }) {
             </div>
           </Field>
 
-          <Field label="How sure do you want to be?">
+          <Field
+            label="How sure do you want to be?"
+            info="Chance that actual wind is at least what the plan counts on. 90% plans on a wind level that was beaten in 9 of 10 hours in January."
+          >
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1" role="radiogroup" aria-label="Confidence">
               {CONFIDENCE.map((c) => (
                 <button
@@ -77,7 +79,10 @@ export default function PlanSection({ day, setDay, decisionHour }) {
             </div>
           </Field>
 
-          <Field label="Demand to cover (MW)" hint="Example figure. Enter your own demand forecast.">
+          <Field
+            label="Demand to cover (MW)"
+            info="Your own demand forecast; 30,000 MW is only an example. The brief allows Elexon wind data only, so demand is entered here. Held flat across the day."
+          >
             <input
               type="number"
               inputMode="numeric"
@@ -116,10 +121,11 @@ export default function PlanSection({ day, setDay, decisionHour }) {
               <div className="rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center gap-2 text-sm text-slate-600">
                   <Wind size={18} className="text-sky-600" aria-hidden /> Wind you can count on
+                  <InfoTip text="Forecast lowered by January's error at your chosen confidence." />
                 </div>
                 <div className="mt-2 text-3xl font-semibold tabular-nums">{mw(t.avg_firm_wind_mw)} MW</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {confidence}% sure · forecast said {mw(t.avg_forecast_mw)} MW
+                  Forecast: {mw(t.avg_forecast_mw)} MW
                 </div>
               </div>
 
@@ -159,9 +165,7 @@ export default function PlanSection({ day, setDay, decisionHour }) {
             </div>
 
             <p className="mt-3 text-sm text-slate-500">
-              Forecast used: published <b>{hhmm(data.forecast_published)}</b> on {dayLabel(data.forecast_published)}, the
-              latest available at {hhmm(data.decision_time)} on {dayLabel(data.decision_time)}. Demand is held flat across
-              the day.
+              Forecast run: {hhmm(data.forecast_published)}, {dayLabel(data.forecast_published)}
             </p>
           </div>
         )}
@@ -175,26 +179,28 @@ function Outcome({ totals: t }) {
   return (
     <div className={`rounded-xl border p-5 ${covered ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
       <div className={`flex items-center gap-2 text-sm ${covered ? 'text-emerald-700' : 'text-rose-700'}`}>
-        {covered ? <CheckCircle2 size={18} aria-hidden /> : <TriangleAlert size={18} aria-hidden />} How this plan turned out
+        {covered ? <CheckCircle2 size={18} aria-hidden /> : <TriangleAlert size={18} aria-hidden />} How it turned out
+        <InfoTip text="The plan replayed against the wind that actually came. A short hour means less wind than planned, so the gap had to be bought at short notice." />
       </div>
       <div className="mt-2 text-3xl font-semibold">
         {covered ? 'Fully covered' : `Short ${t.hours_short} of ${t.hours_planned} h`}
       </div>
       <div className="mt-1 text-sm text-slate-600">
         {covered
-          ? `Actual wind met the plan in all ${t.hours_planned} hours`
-          : `${mw(t.shortfall_mwh)} MWh had to be bought at short notice`}
+          ? `All ${t.hours_planned} hours met`
+          : `${mw(t.shortfall_mwh)} MWh topped up late`}
       </div>
     </div>
   );
 }
 
-function Field({ label, hint, children }) {
+function Field({ label, info, children }) {
   return (
     <div>
-      <div className="mb-1.5 text-sm font-medium text-slate-700">{label}</div>
+      <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+        {label} {info && <InfoTip text={info} />}
+      </div>
       {children}
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
     </div>
   );
 }

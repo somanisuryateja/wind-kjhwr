@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Activity, BarChart3, Target, TrendingDown, TrendingUp } from 'lucide-react';
-import { Card, Stat, Status } from './ui';
+import { Card, InfoTip, Stat, Status } from './ui';
 import { FIRST_DAY, LAST_DAY, mw, signedMw, useApi } from './lib';
 
 const axis = { tick: { fontSize: 12, fill: '#64748b' }, tickLine: false };
@@ -17,7 +17,7 @@ export default function AccuracySection({ decisionHour }) {
       step={3}
       icon={BarChart3}
       title="Forecast accuracy"
-      description="How far actual wind landed from the forecast available at decision time. Error = actual − forecast, so a negative error means less wind than forecast and more power to buy."
+      info="Error = actual − forecast, using the forecast available at decision time. Negative means less wind than forecast, so more power to buy. Scored on the hour (WINDFOR is hourly); forecasts published after their target time are excluded."
     >
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-slate-600">Delivery days</span>
@@ -43,29 +43,30 @@ export default function AccuracySection({ decisionHour }) {
       {s?.mae != null && (
         <div className={loading ? 'opacity-60' : ''}>
           <p className="mt-4 text-sm text-slate-700">
-            In 8 of 10 hours, actual wind was between <b>{signedMw(s.p10)} MW</b> and <b>{signedMw(s.p90)} MW</b> of the
-            forecast ({s.n.toLocaleString('en-GB')} hours scored).
+            8 in 10 hours: actual wind within <b>{signedMw(s.p10)}</b> to <b>{signedMw(s.p90)} MW</b> of the forecast ·{' '}
+            {s.n.toLocaleString('en-GB')} hours
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Typical error (MAE)" value={`${mw(s.mae)} MW`} note="Average size of the miss" icon={Target} tone="violet" />
+            <Stat label="Typical error (MAE)" value={`${mw(s.mae)} MW`} info="Mean absolute error: the average size of the miss, ignoring direction." icon={Target} tone="violet" />
             <Stat
               label="Bias"
               value={`${signedMw(s.bias)} MW`}
-              note={s.bias < 0 ? 'Forecast too high on average' : 'Forecast too low on average'}
+              note={s.bias < 0 ? 'Forecast too high' : 'Forecast too low'}
+              info="Average error with sign kept. Negative means the forecast was too high on average."
               icon={s.bias < 0 ? TrendingDown : TrendingUp}
               tone="amber"
             />
-            <Stat label="Median error" value={`${signedMw(s.p50)} MW`} note="Half of hours above, half below" icon={TrendingDown} tone="amber" />
-            <Stat label="RMSE" value={`${mw(s.rmse)} MW`} note="Weights big misses more" icon={Activity} tone="slate" />
+            <Stat label="Median error" value={`${signedMw(s.p50)} MW`} info="The middle error: half of hours were above it, half below. Not pulled around by a few extreme hours." icon={TrendingDown} tone="amber" />
+            <Stat label="RMSE" value={`${mw(s.rmse)} MW`} info="Root mean square error. Like MAE, but big misses count extra, because they are the costly ones." icon={Activity} tone="slate" />
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <div>
-              <h3 className="font-medium">Error by forecast lead time</h3>
-              <p className="mt-0.5 text-sm text-slate-600">
-                All forecast runs, grouped by how long before delivery they were published.
-              </p>
+              <h3 className="flex items-center gap-1.5 font-medium">
+                Error by forecast lead time{' '}
+                <InfoTip text="Every forecast run, grouped by how many hours before delivery it was published. Shorter blue bars on the left mean fresher forecasts are more accurate." />
+              </h3>
               <div className="mt-3 flex gap-5 text-sm text-slate-600">
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-sm bg-blue-600" /> Typical error (MAE)
@@ -90,10 +91,10 @@ export default function AccuracySection({ decisionHour }) {
             </div>
 
             <div>
-              <h3 className="font-medium">How often each error size happened</h3>
-              <p className="mt-0.5 text-sm text-slate-600">
-                Hours by error, in 500 MW steps. Left of zero: less wind than forecast.
-              </p>
+              <h3 className="flex items-center gap-1.5 font-medium">
+                How often each error size happened{' '}
+                <InfoTip text="Number of hours in each 500 MW error band, using the decision-time forecast." />
+              </h3>
               <div className="mt-3 flex gap-5 text-sm text-slate-600">
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-sm bg-amber-500" /> Less wind than forecast
@@ -119,11 +120,6 @@ export default function AccuracySection({ decisionHour }) {
               </div>
             </div>
           </div>
-
-          <p className="mt-3 text-xs text-slate-500">
-            WINDFOR forecasts are hourly, so accuracy is scored on the hour. Forecasts published after their target time
-            are excluded.
-          </p>
         </div>
       )}
     </Card>
