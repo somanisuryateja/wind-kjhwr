@@ -37,8 +37,34 @@ jobs:
           npm audit --audit-level=high
           npm run build
 
+  docker:
+    # Runs the app exactly as the README tells a reviewer to: docker compose up --build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start with Docker Compose
+        run: docker compose up -d --build
+
+      - name: Check the running app
+        run: |
+          SITE=http://localhost:3000
+          for i in $(seq 1 30); do curl -fsS "$SITE/api/health" && break; sleep 2; done
+          curl -fsS "$SITE/api/health"
+          curl -fsS -o /dev/null "$SITE/api/plan?date=2026-01-15&demand_mw=30000"
+          curl -fsS -o /dev/null "$SITE/api/accuracy"
+          curl -fsS "$SITE/" | grep -q "UK Wind Forecast Monitor"
+          curl -fsSI "$SITE/" | grep -qi "^content-security-policy:"
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$SITE/.env")" = 404 ]
+          [ "$(docker compose exec -T backend id -u)" != 0 ] || { echo "backend runs as root"; exit 1; }
+          echo "Docker Compose app OK"
+
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs
+
   deploy:
-    needs: test
+    needs: [test, docker]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
