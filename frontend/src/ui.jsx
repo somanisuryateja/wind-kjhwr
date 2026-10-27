@@ -74,7 +74,7 @@ export function Card({ step, icon: Icon, title, info, children }) {
   );
 }
 
-export function Stat({ label, value, note, info, icon: Icon, tone = 'slate' }) {
+export function Stat({ label, tag, value, note, info, icon: Icon, tone = 'slate' }) {
   const t = TONES[tone];
   return (
     <div className="relative rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -87,6 +87,11 @@ export function Stat({ label, value, note, info, icon: Icon, tone = 'slate' }) {
         )}
         {label}
         {info && <InfoTip text={info} />}
+        {tag && (
+          <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            {tag}
+          </span>
+        )}
       </div>
       <div className={`mt-2 text-2xl font-semibold tabular-nums ${t.value}`}>{value}</div>
       {note && <div className="mt-0.5 text-sm text-slate-500">{note}</div>}

@@ -76,7 +76,6 @@ export default function ForecastSection({ day, decisionHour }) {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-xs text-slate-500">MW, UK time. Forecasts are hourly; actuals are half-hourly.</p>
         </div>
       )}
     </Card>
