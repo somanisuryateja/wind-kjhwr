@@ -96,7 +96,7 @@ To refresh the data, delete `backend/data/*.json` and run `python -m app.data` f
 - **Rate limit** of 10 API requests per second per IP (burst 20); excess requests get 429.
 - **Pinned dependencies:** exact Python versions in `requirements.txt`, and `package-lock.json` with `npm ci`. CI fails on any high-severity `npm audit` finding.
 - **Containers run as non-root users.**
-- **CI/CD:** every push runs the tests and a production build first. Deploy only happens if they pass. The deploy checks the server's SSH host key, applies the nginx config with an automatic rollback if `nginx -t` fails, and a final job checks the live API and the security headers.
+- **CI/CD:** every push runs the tests and a production build, and separately builds and starts the whole app with `docker compose up --build` and checks it answers. Deploy only happens if both pass. The deploy checks the server's SSH host key, applies the nginx config with an automatic rollback if `nginx -t` fails, and a final job checks the live API and the security headers.
 
 ## API
 
